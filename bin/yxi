@@ -1,0 +1,27 @@
+#!/bin/sh
+# 简化版CLI实现
+VERSION="0.1.0"
+
+case "$1" in
+  --version)
+    echo "yxi.ai CLI v$VERSION"
+    ;;
+  --help)
+    cat << EOF
+yxi.ai CLI - Your eXtended Intelligence
+用法: yxi [命令]
+
+命令:
+  gen <描述>    生成代码
+  explain       解释最后生成的代码
+  update        更新CLI
+EOF
+    ;;
+  update)
+    $HOME/.config/yxi/update.sh
+    ;;
+  *)
+    echo "未知命令。使用 'yxi --help' 查看帮助。"
+    exit 1
+    ;;
+esac
