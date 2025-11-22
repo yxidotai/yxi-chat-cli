@@ -20,7 +20,12 @@ yxi.ai CLI - Your eXtended Intelligence
 EOF
     ;;
   update)
-    $HOME/.config/yxi/update.sh
+    UPDATE_SCRIPT="$HOME/.config/yxi/update.sh"
+    if [ ! -x "$UPDATE_SCRIPT" ]; then
+      echo "未找到更新脚本 ($UPDATE_SCRIPT)。请重新运行 install.sh 或手动创建。"
+      exit 1
+    fi
+    "$UPDATE_SCRIPT"
     ;;
   *)
     echo "未知命令。使用 'yxi --help' 查看帮助。"
