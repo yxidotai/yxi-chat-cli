@@ -1,0 +1,34 @@
+#!/bin/sh
+# 简化版CLI实现
+VERSION="0.1.0"
+
+case "$1" in
+  --version)
+    echo "yxi.ai CLI v$VERSION"
+    ;;
+  --help)
+    cat << EOF
+yxi.ai CLI - Your eXtended Intelligence
+用法: yxi [命令]
+
+命令:
+  gen <描述>    生成代码
+  explain       解释最后生成的代码
+  update        更新CLI
+
+免责声明: 本工具仅供学习和内部测试使用，风险由使用者自行承担。
+EOF
+    ;;
+  update)
+    UPDATE_SCRIPT="$HOME/.config/yxi/update.sh"
+    if [ ! -x "$UPDATE_SCRIPT" ]; then
+      echo "未找到更新脚本 ($UPDATE_SCRIPT)。请重新运行 install.sh 或手动创建。"
+      exit 1
+    fi
+    "$UPDATE_SCRIPT"
+    ;;
+  *)
+    echo "未知命令。使用 'yxi --help' 查看帮助。"
+    exit 1
+    ;;
+esac
