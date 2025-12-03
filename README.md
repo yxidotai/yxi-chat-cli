@@ -32,11 +32,15 @@
 git clone https://github.com/your-username/terminal-chatbot-mcp.git
 cd terminal-chatbot-mcp
 
-# 安装项目依赖（示例）
-pip install -r requirements.txt
+# 推荐：使用 uv 管理依赖
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv sync  # 根据 pyproject.toml 安装 requests、rich 等依赖
 
-# 如果只需 chat 客户端的最小依赖
-pip install requests
+# 如需临时扩展依赖，可执行（示例）
+uv add httpx
+
+# 如果暂不使用 uv，可 fallback 到 pip
+pip install -r requirements.txt
 ```
 
 （如果代码中存在子模块或单独的 `mcp/requirements.txt`，请在 `mcp` 目录内运行 `pip install -r requirements.txt`。）
@@ -62,13 +66,13 @@ cd ..
 
 ```bash
 cd mcp
-python mcp.py   # 默认监听 http://localhost:8000（如需修改请查看 mcp 配置）
+uv run python mcp.py   # 默认监听 http://localhost:8000（如需修改请查看 mcp 配置）
 ```
 
 2. 启动终端 Chatbot（在项目根目录，新终端）：
 
 ```bash
-python chatbot.py
+uv run python chatbot.py
 ```
 
 ### 5. 使用示例
@@ -77,22 +81,27 @@ python chatbot.py
 
 ```bash
 # 添加 MCP 服务器
-add mcp LocalMCP http://localhost:8000
+/mcp add LocalMCP http://localhost:8000
 
 # 将 JSON 转成 C++ 类
 将 {"name":"Alice","age":30,"address":{"city":"NY"}} 转成 class Person
 
 # 列出已添加的 MCP
-list mcps
+/mcp list
+
+# 调用 MCP 工具
+/mcp invoke json_to_cpp {"schema":{"name":"Demo"}}
 ```
 
 ## 📋 核心功能
 
 **MCP 服务器管理**
-- `add mcp <name> <url>`：添加 MCP 节点，例如 `add mcp DevMCP http://192.168.1.100:8000`。
-- `list mcps`：列出已配置的 MCP 节点。
-- `use mcp <name>`：切换当前活跃的 MCP。
-- `remove mcp <name>`：删除指定 MCP。
+- `/mcp add <name> <url> [token]`：添加 MCP 节点，例如 `/mcp add DevMCP http://192.168.1.100:8000`。
+- `/mcp list`：列出已配置的 MCP 节点。
+- `/mcp use <name>`：切换当前活跃的 MCP。
+- `/mcp remove <name>`：删除指定 MCP。
+- `/mcp tools [name]`：列出活跃或指定节点公开的工具。
+- `/mcp invoke <tool> <json_payload>`：执行 MCP 工具，payload 必须是合法 JSON。
 
 **代码生成**
 
@@ -144,6 +153,37 @@ inline void from_json(const nlohmann::json& j, CppBotConfig& value) {
 ```
 
 > 注：如需扩展到其他语言或模版，只需在 `tasks/` 目录中新增任务实现，并在 Chatbot 中注册相应命令。
+
+**Word 表格转 JSON**
+- 运行 `uv run python tasks/word_table_export/export_tables.py input.docx -o tables.json` 即可提取指定 Word 文档内的所有表格。
+- 默认将首行视为表头，自动转换为键值结构；若需保留原始行，可添加 `--no-header`。
+- 通过 `--keep-empty` 控制是否保留空行，`--indent 0` 可输出紧凑 JSON。
+- 输出格式示例：
+
+```json
+{
+  "source": "/path/to/input.docx",
+  "table_count": 2,
+  "tables": [
+    {
+      "index": 0,
+      "headers": ["Name", "Value"],
+      "rows": [
+        {"Name": "Foo", "Value": "123"},
+        {"Name": "Bar", "Value": "456"}
+      ]
+    }
+  ]
+}
+```
+
+**Word 表格 MCP 服务**
+1. 构建镜像：`docker build -t yxi-word-mcp -f tasks/word_table_export/Dockerfile .`
+2. 运行服务（映射 8000 端口，可挂载文档目录）：
+   `docker run --rm -p 8010:8000 -v "$PWD/samples:/data" yxi-word-mcp`
+3. 在 Chatbot 中注册节点：`/mcp add wordtables http://localhost:8010`
+4. 调用工具示例：`/mcp invoke word_tables_to_json {"doc_path":"/data/demo.docx","options":{"keep_empty_rows":false}}`
+5. 若需直接发送文件，可先 `base64 input.docx | tr -d "\n"`，将输出填入 `doc_base64` 字段。
 
 ## ⚠️ 免责声明
 
