@@ -83,11 +83,18 @@ uv run python chatbot.py
 # 添加 MCP 服务器
 /mcp add LocalMCP http://localhost:8000
 
-# 将 JSON 转成 C++ 类
+# 切换到离线模式并绑定节点
+/mode offline LocalMCP
+
+# 列出现有 MCP
+/mcp list
+
+# 将 JSON 转成 C++ 类（回到在线模式）
+/mode online
 将 {"name":"Alice","age":30,"address":{"city":"NY"}} 转成 class Person
 
-# 列出已添加的 MCP
-/mcp list
+# 离线模式直接调用工具（node 可省略为默认离线节点）
+word_tables_to_json {"doc_path":"/data/demo.docx"}
 
 # 调用 MCP 工具
 /mcp invoke json_to_cpp {"schema":{"name":"Demo"}}
@@ -102,6 +109,12 @@ uv run python chatbot.py
 - `/mcp remove <name>`：删除指定 MCP。
 - `/mcp tools [name]`：列出活跃或指定节点公开的工具。
 - `/mcp invoke <tool> <json_payload>`：执行 MCP 工具，payload 必须是合法 JSON。
+
+**在线 / 离线模式**
+- `/mode online`：回到云端模型对话，需要有效 `YXI_API_KEY`。
+- `/mode offline <node>`：绑定离线模式到指定 MCP 节点（默认回落到 `/mcp use` 选中的节点）。
+- 离线模式下，普通输入会被解析为 `<tool> <json_payload>` 或 `<node> <tool> <json_payload>` 并直接调用 MCP；例如 `word_tables_to_json {"doc_path":"/data/demo.docx"}`。
+- 若未配置 `YXI_API_KEY`，程序会自动提醒但仍可使用离线模式。
 
 **代码生成**
 

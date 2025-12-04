@@ -5,6 +5,8 @@
 import os
 import json
 import sys
+from typing import Any, Dict, List
+
 import requests
 from rich.console import Console
 from rich.markdown import Markdown
@@ -24,6 +26,14 @@ HISTORY_FILE = os.path.expanduser("~/.yxi_chat_history.json")
 console = Console()
 mcp_client = MCPClient()
 
+MODE_ONLINE = "online"
+MODE_OFFLINE = "offline"
+
+chat_state = {
+    "mode": MODE_ONLINE,
+    "offline_node": None,
+}
+
 
 def _format_json_blob(payload):
     """Return a pretty JSON dump or string fallback."""
@@ -31,6 +41,10 @@ def _format_json_blob(payload):
         return json.dumps(payload, ensure_ascii=False, indent=2)
     except TypeError:
         return str(payload)
+
+
+def online_available() -> bool:
+    return bool(API_KEY) and API_KEY != "YOUR_API_KEY_HERE"
 
 def load_history():
     """加载历史对话"""
@@ -49,6 +63,10 @@ def save_history(messages):
 
 def stream_completion(messages):
     """流式调用 yxi.ai API"""
+    if not online_available():
+        console.print("[bold yellow]Online mode unavailable. Set YXI_API_KEY to re-enable cloud responses.[/bold yellow]")
+        return ""
+
     headers = {
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json"
@@ -206,6 +224,111 @@ def handle_mcp_command(raw_command, messages):
         console.print(f"[red]MCP network error:[/red] {exc}")
         return True
 
+
+def handle_mode_command(raw_command: str):
+    """Switch between online/cloud mode and offline MCP mode."""
+    command = (raw_command or "").strip()
+    if not command:
+        offline_hint = chat_state.get("offline_node") or "(not set)"
+        console.print(
+            f"[cyan]Current mode: {chat_state['mode']}[/cyan] — offline node: {offline_hint}"
+        )
+        console.print("[yellow]Usage: /mode online | /mode offline <node_name>[/yellow]")
+        return True
+
+    parts = command.split()
+    target_mode = parts[0].lower()
+
+    if target_mode == MODE_ONLINE:
+        chat_state["mode"] = MODE_ONLINE
+        chat_state["offline_node"] = None
+        console.print("[green]Switched to online mode.[/green]")
+        if not online_available():
+            console.print("[red]YXI_API_KEY missing. Online completions will fail until it is set.[/red]")
+        return True
+
+    if target_mode == MODE_OFFLINE:
+        node_name = parts[1] if len(parts) > 1 else mcp_client.active_name
+        if not node_name:
+            console.print("[red]Specify a node: /mode offline <node_name>[/red]")
+            return True
+        if node_name not in mcp_client.nodes:
+            console.print(f"[red]Unknown MCP node: {node_name}[/red]")
+            return True
+        chat_state["mode"] = MODE_OFFLINE
+        chat_state["offline_node"] = node_name
+        console.print(f"[green]Switched to offline mode targeting MCP '{node_name}'.[/green]")
+        return True
+
+    console.print("[red]Unknown mode. Use 'online' or 'offline'.[/red]")
+    return True
+
+
+def handle_offline_input(user_input: str, messages: List[Dict[str, Any]]):
+    """Interpret user input as direct MCP tool invocations while offline."""
+    stripped = (user_input or "").strip()
+    if not stripped:
+        console.print("[yellow]Offline mode expects '<tool> <json>' or '<node> <tool> <json>'.[/yellow]")
+        return True
+
+    parts = stripped.split(maxsplit=2)
+    if len(parts) < 2:
+        console.print("[red]Provide at least a tool name and JSON payload.[/red]")
+        return True
+
+    if len(parts) == 2:
+        node_name = chat_state.get("offline_node")
+        tool_name, payload_raw = parts
+    else:
+        node_name, tool_name, payload_raw = parts
+
+    if not payload_raw:
+        console.print("[red]Missing JSON payload.[/red]")
+        return True
+
+    if not node_name:
+        console.print("[red]No offline node configured. Run /mode offline <node_name> first or prefix the command with the node name.[/red]")
+        return True
+
+    if node_name not in mcp_client.nodes:
+        console.print(f"[red]Unknown MCP node: {node_name}[/red]")
+        return True
+
+    try:
+        payload_obj = json.loads(payload_raw)
+    except json.JSONDecodeError as exc:
+        console.print(f"[red]Invalid JSON payload: {exc}[/red]")
+        return True
+
+    messages.append({"role": "user", "content": user_input})
+    context = {"mode": MODE_OFFLINE, "chat_history": messages[-6:]}
+
+    try:
+        result = mcp_client.invoke_tool(
+            tool_name,
+            payload_obj,
+            node_name=node_name,
+            context=context,
+        )
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        return True
+    except requests.RequestException as exc:
+        console.print(f"[red]MCP network error:[/red] {exc}")
+        return True
+
+    formatted = _format_json_blob(result)
+    console.print(
+        Panel(
+            Markdown(f"```json\n{formatted}\n```"),
+            title=f"MCP • {tool_name} @ {node_name}",
+            border_style="green",
+        )
+    )
+    messages.append({"role": "assistant", "content": f"[MCP:{tool_name}@{node_name}]\n{formatted}"})
+    console.print()
+    return True
+
 def main():
     console.print("[bold green]🚀 yxi chat (prototype) - Type /exit to quit, /clear to reset context[/bold green]\n")
     
@@ -225,8 +348,13 @@ def main():
             continue
 
         # 处理特殊命令
+        if user_input.lower().startswith('/mode'):
+            handle_mode_command(user_input[5:])
+            continue
+
         if user_input.startswith('/'):
-            cmd = user_input[1:].lower()
+            cmd_name, *cmd_rest = user_input[1:].split(maxsplit=1)
+            cmd = cmd_name.lower()
             if cmd in ('exit', 'quit'):
                 save_history(messages)
                 console.print("[bold blue]👋 Session saved. Bye![/bold blue]")
@@ -247,6 +375,11 @@ def main():
                 console.print(f"[bold red]❓ Unknown command: /{cmd}[/bold red]")
                 continue
 
+        if chat_state.get("mode") == MODE_OFFLINE:
+            handled = handle_offline_input(user_input, messages)
+            if handled:
+                continue
+
         # 添加用户消息
         messages.append({"role": "user", "content": user_input})
         
@@ -260,9 +393,8 @@ def main():
 
 if __name__ == "__main__":
     # 检查 API 密钥
-    if API_KEY == "YOUR_API_KEY_HERE":
-        console.print("[bold red]❌ Missing API key! Set YXI_API_KEY environment variable[/bold red]")
+    if not online_available():
+        console.print("[bold yellow]⚠️  No usable YXI_API_KEY found. Online mode will be unavailable until you export YXI_API_KEY.[/bold yellow]")
         console.print("Example: export YXI_API_KEY='your_actual_key'")
-        sys.exit(1)
-    
+
     main()
