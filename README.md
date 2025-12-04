@@ -89,6 +89,9 @@ uv run python chatbot.py
 # 列出现有 MCP
 /mcp list
 
+# 查看指令帮助
+/help
+
 # 将 JSON 转成 C++ 类（回到在线模式）
 /mode online
 将 {"name":"Alice","age":30,"address":{"city":"NY"}} 转成 class Person
@@ -101,6 +104,9 @@ word_tables_to_json {"doc_path":"/data/demo.docx"}
 ```
 
 ## 📋 核心功能
+
+**常用指令**
+- `/help`：查看可用命令与模式提示。
 
 **MCP 服务器管理**
 - `/mcp add <name> <url> [token]`：添加 MCP 节点，例如 `/mcp add DevMCP http://192.168.1.100:8000`。

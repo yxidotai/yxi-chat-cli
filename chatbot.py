@@ -46,6 +46,26 @@ def _format_json_blob(payload):
 def online_available() -> bool:
     return bool(API_KEY) and API_KEY != "YOUR_API_KEY_HERE"
 
+
+def show_help():
+    """Render a quick reference of available commands."""
+    lines = [
+        "[bold]/help[/bold] — 显示本帮助",
+        "[bold]/mode online|offline <node>[/bold] — 切换在线/离线模式",
+        "[bold]/mcp ...[/bold] — 管理 MCP 节点（add/list/use/remove/tools/invoke）",
+        "[bold]/clear[/bold] — 清空上下文（保留 system prompt）",
+        "[bold]/history[/bold] — 查看最近对话摘要",
+        "[bold]/exit[/bold] — 退出并保存",
+        "离线模式下直接输入 `<tool> <json>` 即可调用 MCP 工具",
+    ]
+    console.print(
+        Panel(
+            "\n".join(lines),
+            title="指令速查",
+            border_style="cyan",
+        )
+    )
+
 def load_history():
     """加载历史对话"""
     if os.path.exists(HISTORY_FILE):
@@ -370,6 +390,9 @@ def main():
                     title="📜 Chat History",
                     border_style="yellow"
                 ))
+                continue
+            elif cmd == 'help':
+                show_help()
                 continue
             else:
                 console.print(f"[bold red]❓ Unknown command: /{cmd}[/bold red]")
