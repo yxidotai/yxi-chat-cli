@@ -18,10 +18,12 @@ from rich.text import Text
 from mcp_client import MCPClient
 
 # 配置 (实际产品中应从 ~/.yxi/config 读取)
-API_BASE = "https://api.yxi.ai/v1"  # 替换为你的 yxi.ai 端点
-API_KEY = os.getenv("YXI_API_KEY") or "YOUR_API_KEY_HERE"
-MODEL = "yxi-7b-terminal"
+API_BASE = os.getenv("YXI_API_BASE_URL", "https://api.yxi.ai/v1")  # 可使用 YXI_API_BASE_URL 覆盖
+ENV_API_KEY = os.getenv("YXI_API_KEY")
+API_KEY = ENV_API_KEY or "YOUR_API_KEY_HERE"
+MODEL = os.getenv("YXI_MODEL", "yxi-7b-terminal")
 HISTORY_FILE = os.path.expanduser("~/.yxi_chat_history.json")
+CONFIG_FILE = os.path.expanduser("~/.yxi_chat_config.json")
 
 console = Console()
 mcp_client = MCPClient()
@@ -32,6 +34,8 @@ MODE_OFFLINE = "offline"
 chat_state = {
     "mode": MODE_ONLINE,
     "offline_node": None,
+    "model": MODEL,
+    "api_key": API_KEY,
 }
 
 
@@ -43,14 +47,27 @@ def _format_json_blob(payload):
         return str(payload)
 
 
+def current_api_key() -> str:
+    key = chat_state.get("api_key") or ""
+    if key == "YOUR_API_KEY_HERE":
+        return ""
+    return key
+
+
 def online_available() -> bool:
-    return bool(API_KEY) and API_KEY != "YOUR_API_KEY_HERE"
+    return bool(current_api_key())
+
+
+def current_model() -> str:
+    return chat_state.get("model") or MODEL
 
 
 def show_help():
     """Render a quick reference of available commands."""
     lines = [
         "[bold]/help[/bold] — 显示本帮助",
+        "[bold]/apikey set|clear[/bold] — 设置或清除云端 API key",
+        "[bold]/model list|use|default[/bold] — 查看或切换云端模型",
         "[bold]/mode online|offline <node>[/bold] — 切换在线/离线模式",
         "[bold]/mcp ...[/bold] — 管理 MCP 节点（add/list/use/remove/tools/invoke）",
         "[bold]/clear[/bold] — 清空上下文（保留 system prompt）",
@@ -58,13 +75,105 @@ def show_help():
         "[bold]/exit[/bold] — 退出并保存",
         "离线模式下直接输入 `<tool> <json>` 即可调用 MCP 工具",
     ]
-    console.print(
-        Panel(
-            "\n".join(lines),
-            title="指令速查",
-            border_style="cyan",
+    panel = Panel("\n".join(lines), title="指令速查", border_style="cyan")
+    console.print(panel)
+
+
+def fetch_model_list() -> List[Dict[str, Any]]:
+    """Retrieve available models from the API."""
+    if not online_available():
+        console.print("[yellow]Cannot fetch models: API key missing. Use /apikey set <value> first.[/yellow]")
+        return []
+
+    headers = {"Authorization": f"Bearer {current_api_key()}"}
+    try:
+        response = requests.get(f"{API_BASE}/models", headers=headers, timeout=15)
+        response.raise_for_status()
+        payload = response.json()
+    except requests.RequestException as exc:
+        console.print(f"[red]Failed to fetch models:[/red] {exc}")
+        return []
+    except ValueError:
+        console.print("[red]Model list response is not valid JSON.[/red]")
+        return []
+
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        for key in ("data", "models", "items"):
+            items = payload.get(key)
+            if isinstance(items, list):
+                return items
+        # Some APIs return a dict keyed by id
+        if all(isinstance(k, str) for k in payload.keys()):
+            return [
+                {"id": key, **value} if isinstance(value, dict) else {"id": key, "name": value}
+                for key, value in payload.items()
+            ]
+    return []
+
+
+def set_current_model(model_name: str, persist: bool = False):
+    """Update the active model and optionally persist as default."""
+    chat_state["model"] = model_name
+    if persist:
+        config_state["default_model"] = model_name
+        save_config(config_state)
+
+
+def handle_model_command(raw_command: str):
+    """Manage model listing and selection."""
+    command = (raw_command or "").strip()
+    if not command:
+        console.print(
+            f"[cyan]Current model: {current_model()}[/cyan] — /model list | /model use <name> | /model default <name>"
         )
-    )
+        return True
+
+    parts = command.split(maxsplit=1)
+    action = parts[0].lower()
+    remainder = parts[1].strip() if len(parts) > 1 else ""
+
+    if action in {"list", "ls"}:
+        models = fetch_model_list()
+        if not models:
+            console.print("[yellow]No models were returned by the API.[/yellow]")
+            return True
+        lines = []
+        current = current_model()
+        for item in models:
+            if isinstance(item, dict):
+                identifier = item.get("id") or item.get("name") or item.get("model") or "unknown"
+                desc = item.get("description") or item.get("display_name") or ""
+            else:
+                identifier = str(item)
+                desc = ""
+            prefix = "⭐" if identifier == current else " "
+            line = f"{prefix} [bold]{identifier}[/bold]"
+            if desc:
+                line += f" — {desc}"
+            lines.append(line)
+        console.print(Panel("\n".join(lines), title="Available Models", border_style="cyan"))
+        return True
+
+    if action in {"use", "set"}:
+        if not remainder:
+            console.print("[red]Usage: /model use <model_name>[/red]")
+            return True
+        set_current_model(remainder, persist=False)
+        console.print(f"[green]Switched to model '{remainder}'.[/green]")
+        return True
+
+    if action in {"default", "set-default"}:
+        if not remainder:
+            console.print("[red]Usage: /model default <model_name>[/red]")
+            return True
+        set_current_model(remainder, persist=True)
+        console.print(f"[green]Default model set to '{remainder}'.[/green]")
+        return True
+
+    console.print(f"[red]Unknown model action: {action}[/red]")
+    return True
 
 def load_history():
     """加载历史对话"""
@@ -81,18 +190,48 @@ def save_history(messages):
     with open(HISTORY_FILE, 'w') as f:
         json.dump(messages[-20:], f)  # 保留最近20条
 
+
+def load_config() -> Dict[str, Any]:
+    """Load user preferences such as default model."""
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE) as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    return data
+        except Exception as exc:
+            console.print(f"[yellow]Failed to read {CONFIG_FILE}: {exc}[/yellow]")
+    return {}
+
+
+def save_config(config: Dict[str, Any]):
+    """Persist user preferences to disk."""
+    try:
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(config, f, indent=2)
+    except Exception as exc:
+        console.print(f"[red]Unable to save config: {exc}[/red]")
+
+
+config_state = load_config()
+if config_state.get("default_model"):
+    chat_state["model"] = config_state["default_model"]
+stored_api_key = config_state.get("api_key")
+if stored_api_key and not ENV_API_KEY:
+    chat_state["api_key"] = stored_api_key
+
 def stream_completion(messages):
     """流式调用 yxi.ai API"""
     if not online_available():
-        console.print("[bold yellow]Online mode unavailable. Set YXI_API_KEY to re-enable cloud responses.[/bold yellow]")
+        console.print("[bold yellow]Online mode unavailable. Set YXI_API_KEY or run /apikey set <value> to re-enable cloud responses.[/bold yellow]")
         return ""
 
     headers = {
-        "Authorization": f"Bearer {API_KEY}",
+        "Authorization": f"Bearer {current_api_key()}",
         "Content-Type": "application/json"
     }
     data = {
-        "model": MODEL,
+        "model": current_model(),
         "messages": messages,
         "stream": True,
         "temperature": 0.3
@@ -245,6 +384,43 @@ def handle_mcp_command(raw_command, messages):
         return True
 
 
+def handle_api_key_command(raw_command: str):
+    """Allow setting or clearing the API key without restarting."""
+    command = (raw_command or "").strip()
+    if not command:
+        status = "已配置" if online_available() else "未配置"
+        console.print(f"[cyan]API key 状态：{status}[/cyan]")
+        console.print("[yellow]Usage: /apikey set <value> | /apikey clear[/yellow]")
+        return True
+
+    action, *rest = command.split(maxsplit=1)
+    action = action.lower()
+
+    if action == "set":
+        if not rest:
+            console.print("[red]Usage: /apikey set <value>[/red]")
+            return True
+        new_key = rest[0].strip()
+        if not new_key:
+            console.print("[red]API key 不能为空[/red]")
+            return True
+        chat_state["api_key"] = new_key
+        config_state["api_key"] = new_key
+        save_config(config_state)
+        console.print("[green]API key 已更新（保存在 ~/.yxi_chat_config.json，纯文本存储，请注意风险）。[/green]")
+        return True
+
+    if action in {"clear", "remove"}:
+        chat_state["api_key"] = "YOUR_API_KEY_HERE"
+        if config_state.pop("api_key", None) is not None:
+            save_config(config_state)
+        console.print("[yellow]API key 已清除，在线模式将不可用，直到重新设置或导出 YXI_API_KEY。[/yellow]")
+        return True
+
+    console.print(f"[red]Unknown apikey action: {action}[/red]")
+    return True
+
+
 def handle_mode_command(raw_command: str):
     """Switch between online/cloud mode and offline MCP mode."""
     command = (raw_command or "").strip()
@@ -264,7 +440,7 @@ def handle_mode_command(raw_command: str):
         chat_state["offline_node"] = None
         console.print("[green]Switched to online mode.[/green]")
         if not online_available():
-            console.print("[red]YXI_API_KEY missing. Online completions will fail until it is set.[/red]")
+            console.print("[red]API key missing. Use /apikey set <value> or export YXI_API_KEY before chatting online.[/red]")
         return True
 
     if target_mode == MODE_OFFLINE:
@@ -372,6 +548,14 @@ def main():
             handle_mode_command(user_input[5:])
             continue
 
+        if user_input.lower().startswith('/apikey'):
+            handle_api_key_command(user_input[7:])
+            continue
+
+        if user_input.lower().startswith('/model'):
+            handle_model_command(user_input[6:])
+            continue
+
         if user_input.startswith('/'):
             cmd_name, *cmd_rest = user_input[1:].split(maxsplit=1)
             cmd = cmd_name.lower()
@@ -417,7 +601,7 @@ def main():
 if __name__ == "__main__":
     # 检查 API 密钥
     if not online_available():
-        console.print("[bold yellow]⚠️  No usable YXI_API_KEY found. Online mode will be unavailable until you export YXI_API_KEY.[/bold yellow]")
+        console.print("[bold yellow]⚠️  No usable API key found. Export YXI_API_KEY or run /apikey set <value> after launch.[/bold yellow]")
         console.print("Example: export YXI_API_KEY='your_actual_key'")
 
     main()

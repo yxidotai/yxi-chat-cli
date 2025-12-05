@@ -75,6 +75,13 @@ uv run python mcp.py   # 默认监听 http://localhost:8000（如需修改请查
 uv run python chatbot.py
 ```
 
+运行前可设置以下环境变量：
+- `YXI_API_KEY`：云端对话所需 API 密钥。
+- `YXI_API_BASE_URL`：自定义 yxi API 基础 URL（默认 `https://api.yxi.ai/v1`）。
+- `YXI_MODEL`：指定调用的云端模型（默认 `yxi-7b-terminal`）。
+
+若不便设置环境变量，也可以在 CLI 中执行 `/apikey set <值>` 临时配置；该值会以明文写入 `~/.yxi_chat_config.json`，请按需评估安全风险。
+
 ### 5. 使用示例
 
 在 Chatbot 终端输入自然语言或命令，示例：
@@ -92,6 +99,14 @@ uv run python chatbot.py
 # 查看指令帮助
 /help
 
+# 交互式设置 API Key
+/apikey set sk-your-key
+
+# 查看可用模型并切换
+/model list
+/model use yxi-7b-terminal
+/model default yxi-7b-terminal
+
 # 将 JSON 转成 C++ 类（回到在线模式）
 /mode online
 将 {"name":"Alice","age":30,"address":{"city":"NY"}} 转成 class Person
@@ -107,6 +122,13 @@ word_tables_to_json {"doc_path":"/data/demo.docx"}
 
 **常用指令**
 - `/help`：查看可用命令与模式提示。
+- `/apikey set|clear`：配置或清除云端 API Key。
+
+**模型管理**
+- `/model list`：实时查询云端可用模型（需要有效 `YXI_API_KEY`）。
+- `/model use <name>`：当前会话切换模型，立即生效。
+- `/model default <name>`：设置并持久化默认模型（存储于 `~/.yxi_chat_config.json`）。
+- 也可通过 `YXI_MODEL` 环境变量在启动前指定初始模型。
 
 **MCP 服务器管理**
 - `/mcp add <name> <url> [token]`：添加 MCP 节点，例如 `/mcp add DevMCP http://192.168.1.100:8000`。
