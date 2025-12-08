@@ -1,0 +1,3 @@
+[console_scripts]
+yxi = chatbot:main
+yxi-chat = chatbot:main
