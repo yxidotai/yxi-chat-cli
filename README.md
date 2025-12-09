@@ -99,6 +99,9 @@ uv run python chatbot.py
 # 查看指令帮助
 /help
 
+# 将最近助理回复中的代码块复制到剪贴板（macOS）
+/copy  # 或 /c
+
 # 交互式设置 API Key
 /apikey set sk-your-key
 
@@ -122,6 +125,7 @@ word_tables_to_json {"doc_path":"/data/demo.docx"}
 
 **常用指令**
 - `/help`：查看可用命令与模式提示。
+- `/copy`（或 `/c`）：将最近一次助理回复的代码块（若存在，否则完整回复）复制到剪贴板（macOS 使用 `pbcopy`）。
 - `/apikey set|clear`：配置或清除云端 API Key。
 
 **模型管理**

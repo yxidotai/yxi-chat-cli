@@ -4,6 +4,8 @@
 
 import os
 import json
+import re
+import subprocess
 import sys
 from typing import Any, Dict, List
 
@@ -69,6 +71,7 @@ def show_help():
         "[bold]/model list|use|default[/bold] — 查看或切换云端模型",
         "[bold]/mode online|offline <node>[/bold] — 切换在线/离线模式",
         "[bold]/mcp ...[/bold] — 管理 MCP 节点（add/list/use/remove/tools/invoke）",
+        "[bold]/copy[/bold] (/c) — 复制最近一次助理回复中的代码块（若存在）",
         "[bold]/clear[/bold] — 清空上下文（保留 system prompt）",
         "[bold]/history[/bold] — 查看最近对话摘要",
         "[bold]/exit[/bold] — 退出并保存",
@@ -249,7 +252,7 @@ def stream_completion(messages):
 
             # 使用 Rich 实现流式输出面板
             with Live(
-                Panel(Text(""), title="🤖 yxi.ai", border_style="blue"),
+                Panel(Text(""), title="🤖 yxi.ai • ⧉ /copy", border_style="blue"),
                 console=console,
                 refresh_per_second=10,
             ) as live:
@@ -280,7 +283,11 @@ def stream_completion(messages):
 
                     full_reply += content
                     live.update(
-                        Panel(Markdown(full_reply), title="🤖 yxi.ai", border_style="blue")
+                        Panel(
+                            Markdown(full_reply),
+                            title="🤖 yxi.ai • ⧉ /copy",
+                            border_style="blue",
+                        )
                     )
 
             return full_reply
@@ -384,7 +391,7 @@ def handle_mcp_command(raw_command, messages):
             console.print(
                 Panel(
                     Markdown(f"```json\n{formatted}\n```"),
-                    title=f"MCP • {tool_name}",
+                    title=f"MCP • {tool_name} • ⧉ /copy",
                     border_style="green",
                 )
             )
@@ -535,12 +542,50 @@ def handle_offline_input(user_input: str, messages: List[Dict[str, Any]]):
     console.print(
         Panel(
             Markdown(f"```json\n{formatted}\n```"),
-            title=f"MCP • {tool_name} @ {node_name}",
+            title=f"MCP • {tool_name} @ {node_name} • ⧉ /copy",
             border_style="green",
         )
     )
     messages.append({"role": "assistant", "content": f"[MCP:{tool_name}@{node_name}]\n{formatted}"})
     console.print()
+    return True
+
+
+def copy_to_clipboard(text: str) -> bool:
+    """Copy text to clipboard on macOS using pbcopy."""
+    try:
+        proc = subprocess.run(["pbcopy"], input=text.encode("utf-8"), check=True)
+        return proc.returncode == 0
+    except (FileNotFoundError, subprocess.SubprocessError):
+        return False
+
+
+def extract_code_block(message: str) -> str:
+    """Return the first fenced code block content if present."""
+    match = re.search(r"```[a-zA-Z0-9_+\-]*\n(.*?)```", message, re.S)
+    if match:
+        return match.group(1).rstrip()
+    return ""
+
+
+def handle_copy_command(messages: List[Dict[str, Any]]):
+    """Copy the latest assistant reply code block (or full reply) to clipboard."""
+    last_assistant = next((m for m in reversed(messages) if m.get("role") == "assistant"), None)
+    if not last_assistant:
+        console.print("[yellow]没有可复制的助理回复。[/yellow]")
+        return True
+
+    content = last_assistant.get("content") or ""
+    block = extract_code_block(content)
+    payload = block if block else content
+    if not payload.strip():
+        console.print("[yellow]助理回复为空，无法复制。[/yellow]")
+        return True
+
+    if copy_to_clipboard(payload):
+        console.print("[green]已复制到剪贴板。[/green]" + (" (复制了代码块)" if block else ""))
+    else:
+        console.print("[red]复制失败：未找到 pbcopy（仅支持 macOS 默认环境）。[/red]")
     return True
 
 def main():
@@ -573,6 +618,10 @@ def main():
 
         if user_input.lower().startswith('/model'):
             handle_model_command(user_input[6:])
+            continue
+
+        if user_input.lower().startswith('/copy') or user_input.lower().startswith('/c'):
+            handle_copy_command(messages)
             continue
 
         if user_input.startswith('/'):
