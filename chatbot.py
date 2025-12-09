@@ -12,13 +12,12 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.live import Live
 from rich.panel import Panel
-from rich.prompt import Prompt
 from rich.text import Text
 
 from mcp_client import MCPClient
 
 # 配置 (实际产品中应从 ~/.yxi/config 读取)
-API_BASE = os.getenv("YXI_API_BASE_URL", "https://api.yxi.ai/v1")  # 可使用 YXI_API_BASE_URL 覆盖
+API_BASE = os.getenv("YXI_API_BASE_URL", "https://yxi.ai/v1")  # 可使用 YXI_API_BASE_URL 覆盖
 ENV_API_KEY = os.getenv("YXI_API_KEY")
 API_KEY = ENV_API_KEY or "YOUR_API_KEY_HERE"
 MODEL = os.getenv("YXI_MODEL", "yxi-7b-terminal")
@@ -243,28 +242,47 @@ def stream_completion(messages):
             json=data,
             headers=headers,
             stream=True,
-            timeout=30
+            timeout=30,
         ) as response:
             response.raise_for_status()
             full_reply = ""
-            
+
             # 使用 Rich 实现流式输出面板
             with Live(
                 Panel(Text(""), title="🤖 yxi.ai", border_style="blue"),
                 console=console,
-                refresh_per_second=10
+                refresh_per_second=10,
             ) as live:
-                for line in response.iter_lines():
-                    if line:
-                        chunk = line.decode('utf-8').strip()
-                        if chunk.startswith(' ') and chunk != ' [DONE]':
-                            try:
-                                content = json.loads(chunk[6:])["choices"][0]["delta"].get("content", "")
-                                if content:
-                                    full_reply += content
-                                    live.update(Panel(Markdown(full_reply), title="🤖 yxi.ai", border_style="blue"))
-                            except:
-                                continue
+                for raw_line in response.iter_lines():
+                    if not raw_line:
+                        continue
+                    chunk = raw_line.decode("utf-8").strip()
+
+                    # 兼容 OpenAI 风格的 SSE："data: {...}" / "data: [DONE]"
+                    if chunk.startswith("data:"):
+                        payload_str = chunk[len("data:") :].strip()
+                    else:
+                        payload_str = chunk
+
+                    if payload_str in {"[DONE]", "data: [DONE]"}:
+                        break
+
+                    try:
+                        event = json.loads(payload_str)
+                    except json.JSONDecodeError:
+                        continue
+
+                    choice = (event.get("choices") or [{}])[0]
+                    delta = choice.get("delta") or choice.get("message") or {}
+                    content = delta.get("content") or ""
+                    if not content:
+                        continue
+
+                    full_reply += content
+                    live.update(
+                        Panel(Markdown(full_reply), title="🤖 yxi.ai", border_style="blue")
+                    )
+
             return full_reply
     except Exception as e:
         console.print(f"[bold red]API Error:[/bold red] {str(e)}")
@@ -533,7 +551,8 @@ def main():
     
     while True:
         try:
-            user_input = Prompt.ask("[bold yellow]💬 You[/bold yellow]")
+            # 使用内置 input()，并避免表情等宽字符以兼容中文删除
+            user_input = input("You > ")
         except (KeyboardInterrupt, EOFError):
             console.print("\n[bold blue]👋 Session saved. Bye![/bold blue]")
             save_history(messages)
