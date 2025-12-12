@@ -21,5 +21,11 @@ requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["tasks"]
+packages = [
+    "tasks",
+    "tasks.word_table_export",
+    "tasks.obsidian_mcp",
+    "tasks.report_generator",
+    "tasks.service_deploy",
+]
 py-modules = ["chatbot", "main", "mcp_client", "task_scheduler"]

@@ -119,6 +119,21 @@ word_tables_to_json {"doc_path":"/data/demo.docx"}
 
 # 调用 MCP 工具
 /mcp invoke json_to_cpp {"schema":{"name":"Demo"}}
+
+# 运行 Obsidian MCP（示例）并注册
+OBSIDIAN_VAULT_DIR=~/Documents/ObsidianVault OBSIDIAN_MCP_TOKEN=sk-obsidian uv run python tasks/obsidian_mcp/mcp_service.py
+/mcp add obsidian http://localhost:8025 sk-obsidian
+/mcp tools obsidian
+/mcp invoke search_notes {"query":"roadmap","limit":5}
+/mcp invoke append_note {"path":"notes/todo.md","content":"- [ ] new item"}
+
+# Docker 方式运行 Obsidian MCP（示例）
+docker build -f tasks/obsidian_mcp/Dockerfile -t yxi-obsidian-mcp .
+docker run --rm -p 8025:8025 \
+  -v "$HOME/Documents/ObsidianVault:/vault" \
+  -e OBSIDIAN_VAULT_DIR=/vault \
+  -e OBSIDIAN_MCP_TOKEN=sk-obsidian \
+  yxi-obsidian-mcp
 ```
 
 ## 📋 核心功能
@@ -147,6 +162,17 @@ word_tables_to_json {"doc_path":"/data/demo.docx"}
 - `/mode offline <node>`：绑定离线模式到指定 MCP 节点（默认回落到 `/mcp use` 选中的节点）。
 - 离线模式下，普通输入会被解析为 `<tool> <json_payload>` 或 `<node> <tool> <json_payload>` 并直接调用 MCP；例如 `word_tables_to_json {"doc_path":"/data/demo.docx"}`。
 - 若未配置 `YXI_API_KEY`，程序会自动提醒但仍可使用离线模式。
+
+**Obsidian MCP 示例**
+- 服务端：`tasks/obsidian_mcp/mcp_service.py`，需要 Python 依赖 `tasks/obsidian_mcp/requirements.txt`。
+- 启动示例：`OBSIDIAN_VAULT_DIR=~/Documents/ObsidianVault OBSIDIAN_MCP_TOKEN=sk-obsidian uv run python tasks/obsidian_mcp/mcp_service.py`（默认监听 0.0.0.0:8025）。
+- 注册节点：`/mcp add obsidian http://localhost:8025 sk-obsidian`
+- 列出工具：`/mcp tools obsidian`
+- 调用搜索：`/mcp invoke search_notes {"query":"roadmap","limit":5}`
+- 追加笔记：`/mcp invoke append_note {"path":"notes/todo.md","content":"- [ ] new item"}`
+- Docker 运行：
+  - 构建：`docker build -f tasks/obsidian_mcp/Dockerfile -t yxi-obsidian-mcp .`
+  - 运行：`docker run --rm -p 8025:8025 -v "$HOME/Documents/ObsidianVault:/vault" -e OBSIDIAN_VAULT_DIR=/vault -e OBSIDIAN_MCP_TOKEN=sk-obsidian yxi-obsidian-mcp`
 
 **代码生成**
 
