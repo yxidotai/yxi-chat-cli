@@ -27,5 +27,6 @@ packages = [
     "tasks.obsidian_mcp",
     "tasks.report_generator",
     "tasks.service_deploy",
+    "tasks.json_to_java",
 ]
 py-modules = ["chatbot", "main", "mcp_client", "task_scheduler"]

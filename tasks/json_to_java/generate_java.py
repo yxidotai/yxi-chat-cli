@@ -1,0 +1,156 @@
+"""
+Convert a nested JSON document into Java POJOs (single file with nested static classes).
+
+Usage:
+    uv run python tasks/json_to_java/generate_java.py input.json -o Output.java \
+        --package com.example.demo --class-name Root
+
+Features:
+- Infers basic field types (String, int, double, boolean, Object)
+- Supports nested objects and arrays (arrays become java.util.List<T>)
+- Creates nested static classes for object fields and object arrays
+- Generates valid Java identifiers from JSON keys
+
+Limitations:
+- Mixed-type arrays fall back to List<Object>
+- Null-only fields are typed as Object
+- No Lombok/getters/setters; this is a minimal DTO scaffold
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
+
+PRIMITIVES = {str: "String", int: "int", float: "double", bool: "boolean"}
+
+
+def to_identifier(name: str) -> str:
+    """Convert arbitrary key to a safe Java identifier in camelCase."""
+    if not name:
+        return "field"
+    # Replace non-alphanumeric with space, then camel-case
+    name = re.sub(r"[^0-9A-Za-z]+", " ", name).strip()
+    if not name:
+        return "field"
+    parts = name.split()
+    first = parts[0].lower()
+    rest = [p.capitalize() for p in parts[1:]]
+    ident = first + "".join(rest)
+    if ident[0].isdigit():
+        ident = f"f{ident}"
+    return ident
+
+
+def to_pascal(name: str) -> str:
+    ident = to_identifier(name)
+    return ident[:1].upper() + ident[1:]
+
+
+def unique_class_name(base: str, used: Dict[str, int]) -> str:
+    count = used.get(base, 0)
+    if count == 0:
+        used[base] = 1
+        return base
+    used[base] = count + 1
+    return f"{base}{count+1}"
+
+
+def infer_list_type(field_name: str, values: List[Any], used: Dict[str, int], classes: List[str]) -> str:
+    # Remove None entries for inference
+    non_null = [v for v in values if v is not None]
+    if not non_null:
+        return "java.util.List<Object>"
+
+    first = non_null[0]
+    # If all are dicts -> create nested class
+    if all(isinstance(v, dict) for v in non_null):
+        cls_base = to_pascal(f"{field_name}Item")
+        cls_name = unique_class_name(cls_base, used)
+        class_def = build_class(cls_name, first, used, classes)
+        classes.append(class_def)
+        return f"java.util.List<{cls_name}>"
+
+    # If all same primitive type
+    if all(isinstance(v, str) for v in non_null):
+        return "java.util.List<String>"
+    if all(isinstance(v, bool) for v in non_null):
+        return "java.util.List<boolean>"
+    if all(isinstance(v, int) for v in non_null):
+        return "java.util.List<int>"
+    if all(isinstance(v, float) for v in non_null):
+        return "java.util.List<double>"
+
+    # Mixed primitive types
+    return "java.util.List<Object>"
+
+
+def build_class(name: str, obj: Dict[str, Any], used: Dict[str, int], classes: List[str]) -> str:
+    fields: List[Tuple[str, str]] = []
+
+    for key, value in obj.items():
+        field_name = to_identifier(key)
+        if isinstance(value, dict):
+            cls_base = to_pascal(key or field_name)
+            cls_name = unique_class_name(cls_base, used)
+            nested_def = build_class(cls_name, value, used, classes)
+            classes.append(nested_def)
+            fields.append((cls_name, field_name))
+        elif isinstance(value, list):
+            list_type = infer_list_type(key or field_name, value, used, classes)
+            fields.append((list_type, field_name))
+        elif value is None:
+            fields.append(("Object", field_name))
+        else:
+            fields.append((PRIMITIVES.get(type(value), "Object"), field_name))
+
+    lines = [f"public static class {name} {{"]
+    for f_type, f_name in fields:
+        lines.append(f"    public {f_type} {f_name};")
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def generate_java(root_name: str, payload: Dict[str, Any], package: str | None) -> str:
+    used: Dict[str, int] = {}
+    classes: List[str] = []
+    root_class_name = unique_class_name(root_name, used)
+    root_def = build_class(root_class_name, payload, used, classes)
+    classes.append(root_def)
+
+    header = []
+    if package:
+        header.append(f"package {package};\n")
+    header.append("import java.util.*;\n")
+
+    body = "\n\n".join(reversed(classes))  # ensure root last? we built children first then appended root
+    # Actually root_def appended last; we reversed to place root first; so invert
+    body = "\n\n".join(classes[::-1])
+    return "\n".join(header + [body])
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Convert JSON to Java POJOs (nested static classes)")
+    parser.add_argument("input", help="Path to JSON file")
+    parser.add_argument("-o", "--output", help="Output .java file (default: stdout)")
+    parser.add_argument("--package", dest="package", help="Java package name", default=None)
+    parser.add_argument("--class-name", dest="class_name", help="Root class name", default="Root")
+    args = parser.parse_args()
+
+    data = json.loads(Path(args.input).read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise SystemExit("Top-level JSON must be an object for class generation")
+
+    java_code = generate_java(args.class_name, data, args.package)
+
+    if args.output:
+        Path(args.output).write_text(java_code, encoding="utf-8")
+    else:
+        print(java_code)
+
+
+if __name__ == "__main__":
+    main()

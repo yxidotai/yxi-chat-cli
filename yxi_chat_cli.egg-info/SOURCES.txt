@@ -5,6 +5,14 @@ mcp_client.py
 pyproject.toml
 task_scheduler.py
 tasks/__init__.py
+tasks/json_to_java/__init__.py
+tasks/json_to_java/generate_java.py
+tasks/obsidian_mcp/__init__.py
+tasks/obsidian_mcp/mcp_service.py
+tasks/report_generator/generate_report.py
+tasks/word_table_export/__init__.py
+tasks/word_table_export/export_tables.py
+tasks/word_table_export/mcp_service.py
 yxi_chat_cli.egg-info/PKG-INFO
 yxi_chat_cli.egg-info/SOURCES.txt
 yxi_chat_cli.egg-info/dependency_links.txt

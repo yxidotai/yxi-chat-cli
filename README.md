@@ -127,6 +127,9 @@ OBSIDIAN_VAULT_DIR=~/Documents/ObsidianVault OBSIDIAN_MCP_TOKEN=sk-obsidian uv r
 /mcp invoke search_notes {"query":"roadmap","limit":5}
 /mcp invoke append_note {"path":"notes/todo.md","content":"- [ ] new item"}
 
+# 将嵌套 JSON 转成 Java 类（可指定包名）
+uv run python tasks/json_to_java/generate_java.py samples/nested.json -o Output.java --package com.example.demo --class-name Root
+
 # Docker 方式运行 Obsidian MCP（示例）
 docker build -f tasks/obsidian_mcp/Dockerfile -t yxi-obsidian-mcp .
 docker run --rm -p 8025:8025 \
@@ -162,6 +165,11 @@ docker run --rm -p 8025:8025 \
 - `/mode offline <node>`：绑定离线模式到指定 MCP 节点（默认回落到 `/mcp use` 选中的节点）。
 - 离线模式下，普通输入会被解析为 `<tool> <json_payload>` 或 `<node> <tool> <json_payload>` 并直接调用 MCP；例如 `word_tables_to_json {"doc_path":"/data/demo.docx"}`。
 - 若未配置 `YXI_API_KEY`，程序会自动提醒但仍可使用离线模式。
+
+**JSON 转 Java 类工具**
+- 入口：`tasks/json_to_java/generate_java.py`
+- 作用：将复杂嵌套 JSON 生成单文件 Java POJO，支持包名与根类名；嵌套对象会生成静态内部类，数组生成 `List<T>`，混合类型数组回落为 `List<Object>`。
+- 示例：`uv run python tasks/json_to_java/generate_java.py samples/nested.json -o Output.java --package com.example.demo --class-name Root`
 
 **Obsidian MCP 示例**
 - 服务端：`tasks/obsidian_mcp/mcp_service.py`，需要 Python 依赖 `tasks/obsidian_mcp/requirements.txt`。
