@@ -9,6 +9,7 @@ Features:
 - Infers basic field types (String, Integer, Double, Boolean, Object)
 - Supports nested objects and arrays (arrays become java.util.List<T>)
 - Creates nested static classes for object fields and object arrays
+- Adds Jackson annotations: @JsonIgnoreProperties(ignoreUnknown = true), @JsonProperty("<json key>")
 - Generates valid Java identifiers from JSON keys
 
 Limitations:
@@ -102,26 +103,28 @@ def java_type_for_value(value: Any) -> str:
 
 
 def build_class(name: str, obj: Dict[str, Any], used: Dict[str, int], classes: List[str]) -> str:
-    fields: List[Tuple[str, str]] = []
+    fields: List[Tuple[str, str, str]] = []
 
     for key, value in obj.items():
         field_name = to_identifier(key)
+        json_key = key or field_name
         if isinstance(value, dict):
             cls_base = to_pascal(key or field_name)
             cls_name = unique_class_name(cls_base, used)
             nested_def = build_class(cls_name, value, used, classes)
             classes.append(nested_def)
-            fields.append((cls_name, field_name))
+            fields.append((cls_name, field_name, json_key))
         elif isinstance(value, list):
             list_type = infer_list_type(key or field_name, value, used, classes)
-            fields.append((list_type, field_name))
+            fields.append((list_type, field_name, json_key))
         elif value is None:
-            fields.append(("Object", field_name))
+            fields.append(("Object", field_name, json_key))
         else:
-            fields.append((java_type_for_value(value), field_name))
+            fields.append((java_type_for_value(value), field_name, json_key))
 
-    lines = [f"public static class {name} {{"]
-    for f_type, f_name in fields:
+    lines = ["@JsonIgnoreProperties(ignoreUnknown = true)", f"public static class {name} {{"]
+    for f_type, f_name, json_key in fields:
+        lines.append(f"    @JsonProperty(\"{json_key}\")")
         lines.append(f"    public {f_type} {f_name};")
     lines.append("}")
     return "\n".join(lines)
@@ -137,6 +140,8 @@ def generate_java(root_name: str, payload: Dict[str, Any], package: str | None) 
     header = []
     if package:
         header.append(f"package {package};\n")
+    header.append("import com.fasterxml.jackson.annotation.JsonIgnoreProperties;\n")
+    header.append("import com.fasterxml.jackson.annotation.JsonProperty;\n")
     header.append("import java.util.*;\n")
 
     body = "\n\n".join(reversed(classes))  # ensure root last? we built children first then appended root
