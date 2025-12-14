@@ -6,7 +6,7 @@ Usage:
         --package com.example.demo --class-name Root
 
 Features:
-- Infers basic field types (String, int, double, boolean, Object)
+- Infers basic field types (String, Integer, Double, Boolean, Object)
 - Supports nested objects and arrays (arrays become java.util.List<T>)
 - Creates nested static classes for object fields and object arrays
 - Generates valid Java identifiers from JSON keys
@@ -25,7 +25,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-PRIMITIVES = {str: "String", int: "int", float: "double", bool: "boolean"}
+PRIMITIVES = {str: "String", int: "Integer", float: "Double", bool: "Boolean"}
 
 
 def to_identifier(name: str) -> str:
@@ -74,18 +74,31 @@ def infer_list_type(field_name: str, values: List[Any], used: Dict[str, int], cl
         classes.append(class_def)
         return f"java.util.List<{cls_name}>"
 
-    # If all same primitive type
+    # If all same primitive type (boxed)
     if all(isinstance(v, str) for v in non_null):
         return "java.util.List<String>"
     if all(isinstance(v, bool) for v in non_null):
-        return "java.util.List<boolean>"
+        return "java.util.List<Boolean>"
+    # bool is subclass of int; check int after bool
     if all(isinstance(v, int) for v in non_null):
-        return "java.util.List<int>"
+        return "java.util.List<Integer>"
     if all(isinstance(v, float) for v in non_null):
-        return "java.util.List<double>"
+        return "java.util.List<Double>"
 
     # Mixed primitive types
     return "java.util.List<Object>"
+
+
+def java_type_for_value(value: Any) -> str:
+    if isinstance(value, bool):
+        return "Boolean"
+    if isinstance(value, int):
+        return "Integer"
+    if isinstance(value, float):
+        return "Double"
+    if isinstance(value, str):
+        return "String"
+    return "Object"
 
 
 def build_class(name: str, obj: Dict[str, Any], used: Dict[str, int], classes: List[str]) -> str:
@@ -105,7 +118,7 @@ def build_class(name: str, obj: Dict[str, Any], used: Dict[str, int], classes: L
         elif value is None:
             fields.append(("Object", field_name))
         else:
-            fields.append((PRIMITIVES.get(type(value), "Object"), field_name))
+            fields.append((java_type_for_value(value), field_name))
 
     lines = [f"public static class {name} {{"]
     for f_type, f_name in fields:
@@ -138,11 +151,48 @@ def main():
     parser.add_argument("-o", "--output", help="Output .java file (default: stdout)")
     parser.add_argument("--package", dest="package", help="Java package name", default=None)
     parser.add_argument("--class-name", dest="class_name", help="Root class name", default="Root")
+    parser.add_argument(
+        "--json-path",
+        dest="json_path",
+        help="Dot/bracket path within JSON to use as root (e.g., data.items[0].payload)",
+        default=None,
+    )
     args = parser.parse_args()
 
     data = json.loads(Path(args.input).read_text(encoding="utf-8"))
+
+    def resolve_path(node: Any, path: str) -> Any:
+        current = node
+        for part in path.split('.'):
+            if '[' in part and part.endswith(']'):
+                name, idx_txt = part[:-1].split('[', 1)
+                if name:
+                    if isinstance(current, dict):
+                        current = current.get(name)
+                    else:
+                        return None
+                try:
+                    idx = int(idx_txt)
+                except ValueError:
+                    return None
+                if isinstance(current, list) and 0 <= idx < len(current):
+                    current = current[idx]
+                else:
+                    return None
+            else:
+                if isinstance(current, dict):
+                    current = current.get(part)
+                else:
+                    return None
+        return current
+
+    if args.json_path:
+        data = resolve_path(data, args.json_path)
+        if data is None:
+            raise SystemExit(f"json-path not found: {args.json_path}")
+
     if not isinstance(data, dict):
-        raise SystemExit("Top-level JSON must be an object for class generation")
+        raise SystemExit("Top-level JSON (after json-path) must be an object for class generation")
 
     java_code = generate_java(args.class_name, data, args.package)
 
