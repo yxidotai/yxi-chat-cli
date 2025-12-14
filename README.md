@@ -170,6 +170,7 @@ docker run --rm -p 8025:8025 \
 - 入口：`tasks/json_to_java/generate_java.py`
 - 作用：将复杂嵌套 JSON 生成单文件 Java POJO，支持包名与根类名；嵌套对象会生成静态内部类，数组生成 `List<T>`，混合类型数组回落为 `List<Object>`。
 - 示例：`uv run python tasks/json_to_java/generate_java.py samples/nested.json -o Output.java --package com.example.demo --class-name Root`
+- MCP 服务：`uv run python tasks/json_to_java/mcp_service.py`（默认 0.0.0.0:8030），`/tools` 列出工具，调用示例 `/mcp invoke json_to_java {"json_text":"{...}","class_name":"Root","package":"com.example.demo"}`。
 
 **Obsidian MCP 示例**
 - 服务端：`tasks/obsidian_mcp/mcp_service.py`，需要 Python 依赖 `tasks/obsidian_mcp/requirements.txt`。
