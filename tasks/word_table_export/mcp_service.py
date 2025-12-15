@@ -11,8 +11,13 @@ from typing import Any, Dict, Optional
 from docx import Document
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
+try:
+    from .export_tables import extract_tables_from_document
+except ImportError:  # pragma: no cover - fallback for direct script execution
+    import sys
 
-from .export_tables import extract_tables_from_document
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from tasks.word_table_export.export_tables import extract_tables_from_document
 
 TOOL_NAME = "word_tables_to_json"
 
@@ -117,3 +122,11 @@ def invoke_tool(request: InvokeRequest) -> Dict[str, Any]:
     if request.context:
         response["context_echo"] = request.context
     return response
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    host = "0.0.0.0"
+    port = 8000
+    uvicorn.run("mcp_service:app", host=host, port=port, reload=False)

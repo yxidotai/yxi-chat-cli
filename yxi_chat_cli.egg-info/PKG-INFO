@@ -9,6 +9,7 @@ Requires-Dist: requests>=2.32.5
 Requires-Dist: rich>=14.2.0
 Requires-Dist: python-docx>=1.1.0
 Requires-Dist: uvicorn>=0.30.0
+Requires-Dist: langgraph>=0.2.27
 
 # yxi-chat-cli — 轻量级开发自动化助手
 
@@ -182,6 +183,9 @@ docker run --rm -p 8025:8025 \
 - 入口：`tasks/json_to_java/generate_java.py`
 - 作用：将复杂嵌套 JSON 生成单文件 Java POJO，支持包名与根类名；嵌套对象会生成静态内部类，数组生成 `List<T>`，混合类型数组回落为 `List<Object>`。
 - 示例：`uv run python tasks/json_to_java/generate_java.py samples/nested.json -o Output.java --package com.example.demo --class-name Root`
+- MCP 服务：`uv run python tasks/json_to_java/mcp_service.py`（默认 0.0.0.0:8030），`/tools` 列出工具，调用示例 `/mcp invoke json_to_java {"json_text":"{...}","class_name":"Root","package":"com.example.demo"}`。
+- Docker：`docker build -f tasks/json_to_java/Dockerfile -t yxi-json-to-java .`，运行示例 `docker run --rm -p 8030:8030 yxi-json-to-java`（如需访问本地文件，可通过 `-v "$PWD:/data"` 并传入绝对路径）。
+- LangGraph 智能体：`uv run python tasks/json_to_java/langgraph_agent.py path/to/doc.docx --word-url http://localhost:8000 --java-url http://localhost:8030 --package com.example.demo --class-name Root --output-path /tmp/Output.java`，自动串联 `word_table_export` 与 `json_to_java` 完成 docx → 表格 → 示例 JSON → Java 生成。
 
 **Obsidian MCP 示例**
 - 服务端：`tasks/obsidian_mcp/mcp_service.py`，需要 Python 依赖 `tasks/obsidian_mcp/requirements.txt`。

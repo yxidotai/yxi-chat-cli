@@ -10,6 +10,7 @@ dependencies = [
     "rich>=14.2.0",
     "python-docx>=1.1.0",
     "uvicorn>=0.30.0",
+    "langgraph>=0.2.27",
 ]
 
 [project.scripts]

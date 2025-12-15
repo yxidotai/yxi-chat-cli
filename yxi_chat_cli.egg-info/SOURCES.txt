@@ -7,6 +7,8 @@ task_scheduler.py
 tasks/__init__.py
 tasks/json_to_java/__init__.py
 tasks/json_to_java/generate_java.py
+tasks/json_to_java/langgraph_agent.py
+tasks/json_to_java/mcp_service.py
 tasks/obsidian_mcp/__init__.py
 tasks/obsidian_mcp/mcp_service.py
 tasks/report_generator/generate_report.py

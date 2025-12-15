@@ -171,6 +171,8 @@ docker run --rm -p 8025:8025 \
 - 作用：将复杂嵌套 JSON 生成单文件 Java POJO，支持包名与根类名；嵌套对象会生成静态内部类，数组生成 `List<T>`，混合类型数组回落为 `List<Object>`。
 - 示例：`uv run python tasks/json_to_java/generate_java.py samples/nested.json -o Output.java --package com.example.demo --class-name Root`
 - MCP 服务：`uv run python tasks/json_to_java/mcp_service.py`（默认 0.0.0.0:8030），`/tools` 列出工具，调用示例 `/mcp invoke json_to_java {"json_text":"{...}","class_name":"Root","package":"com.example.demo"}`。
+- Docker：`docker build -f tasks/json_to_java/Dockerfile -t yxi-json-to-java .`，运行示例 `docker run --rm -p 8030:8030 yxi-json-to-java`（如需访问本地文件，可通过 `-v "$PWD:/data"` 并传入绝对路径）。
+- LangGraph 智能体：`uv run python tasks/json_to_java/langgraph_agent.py path/to/doc.docx --word-url http://localhost:8000 --java-url http://localhost:8030 --package com.example.demo --class-name Root --output-path /tmp/Output.java`，自动串联 `word_table_export` 与 `json_to_java` 完成 docx → 表格 → 示例 JSON → Java 生成。
 
 **Obsidian MCP 示例**
 - 服务端：`tasks/obsidian_mcp/mcp_service.py`，需要 Python 依赖 `tasks/obsidian_mcp/requirements.txt`。
@@ -264,6 +266,20 @@ inline void from_json(const nlohmann::json& j, CppBotConfig& value) {
 3. 在 Chatbot 中注册节点：`/mcp add wordtables http://localhost:8010`
 4. 调用工具示例：`/mcp invoke word_tables_to_json {"doc_path":"/data/demo.docx","options":{"keep_empty_rows":false}}`
 5. 若需直接发送文件，可先 `base64 input.docx | tr -d "\n"`，将输出填入 `doc_base64` 字段。
+
+
+
+# 启动两个 MCP 服务（假设 word_table_export 在 8000，json_to_java 在 8030）
+# uv run python tasks/word_table_export/mcp_service.py
+# uv run python tasks/json_to_java/mcp_service.py
+
+# 运行智能体
+uv run python tasks/json_to_java/langgraph_agent.py ./samples/demo.docx \
+  --word-url http://localhost:8000 \
+  --java-url http://localhost:8030 \
+  --package com.example.demo \
+  --class-name Root \
+  --output-path /tmp/Output.java
 
 ## ⚠️ 免责声明
 

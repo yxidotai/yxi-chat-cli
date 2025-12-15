@@ -8,7 +8,13 @@ from typing import Any, Dict, Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from .generate_java import generate_java
+try:
+    from .generate_java import generate_java
+except ImportError:  # pragma: no cover - allow running as a script
+    import sys
+
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from tasks.json_to_java.generate_java import generate_java
 
 TOOL_NAME = "json_to_java"
 
@@ -41,6 +47,10 @@ TOOL_DEFINITION = {
                 "description": "Root class name",
                 "default": "Root",
             },
+            "output_path": {
+                "type": "string",
+                "description": "Optional path to write generated Java code",
+            },
         },
         "required": [],
         "additionalProperties": False,
@@ -54,6 +64,7 @@ class JsonToJavaInput(BaseModel):
     root_path: Optional[str] = Field(default=None, description="Dot/bracket path to sub-node root")
     package: Optional[str] = Field(default=None, description="Java package name")
     class_name: str = Field(default="Root", description="Root class name")
+    output_path: Optional[str] = Field(default=None, description="Path to write generated Java code")
 
 
 class InvokeRequest(BaseModel):
@@ -131,23 +142,31 @@ def invoke_tool(request: InvokeRequest) -> Dict[str, Any]:
 
     java_code = generate_java(payload.class_name, data, payload.package)
 
-    response = {
+    written_to = None
+    if payload.output_path:
+        out_path = Path(payload.output_path).expanduser().resolve()
+        try:
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(java_code, encoding="utf-8")
+            written_to = str(out_path)
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=f"Failed to write output file: {exc}")
+
+    return {
         "tool": TOOL_NAME,
         "data": {
             "class_name": payload.class_name,
             "package": payload.package,
             "root_path": payload.root_path,
             "java": java_code,
+            "output_path": written_to,
         },
     }
-    if request.context:
-        response["context_echo"] = request.context
-    return response
 
 
 if __name__ == "__main__":
     import uvicorn
 
     host = "0.0.0.0"
-    port = 8030
+    port = 8000
     uvicorn.run("mcp_service:app", host=host, port=port, reload=False)
