@@ -168,5 +168,5 @@ if __name__ == "__main__":
     import uvicorn
 
     host = "0.0.0.0"
-    port = 8000
+    port = 8030
     uvicorn.run("mcp_service:app", host=host, port=port, reload=False)

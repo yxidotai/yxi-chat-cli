@@ -15,6 +15,7 @@ from rich.markdown import Markdown
 from rich.live import Live
 from rich.panel import Panel
 from rich.text import Text
+import argparse
 
 from mcp_client import MCPClient
 
@@ -76,6 +77,7 @@ def show_help():
         "[bold]/history[/bold] — 查看最近对话摘要",
         "[bold]/exit[/bold] — 退出并保存",
         "离线模式下直接输入 `<tool> <json>` 即可调用 MCP 工具",
+        "[bold]/agent doc2java <doc_path> [--word-url ... --java-url ... --package ... --class-name ... --output-path ...][/bold]",
     ]
     panel = Panel("\n".join(lines), title="指令速查", border_style="cyan")
     console.print(panel)
@@ -446,6 +448,44 @@ def handle_api_key_command(raw_command: str):
     return True
 
 
+def run_doc2java_agent(args: List[str]):
+    """Run the langgraph doc->java agent from terminal."""
+    parser = argparse.ArgumentParser(prog="/agent doc2java", add_help=False)
+    parser.add_argument("doc_path")
+    parser.add_argument("--word-url", default="http://localhost:8000")
+    parser.add_argument("--java-url", default="http://localhost:8030")
+    parser.add_argument("--package", dest="package", default=None)
+    parser.add_argument("--class-name", dest="class_name", default=None)
+    parser.add_argument("--max-depth", type=int, default=4)
+    parser.add_argument("--output-path", dest="output_path", default=None)
+    try:
+        opts = parser.parse_args(args)
+    except SystemExit:
+        console.print("[red]用法: /agent doc2java <doc_path> [--word-url ... --java-url ... --package ... --class-name ... --output-path ...][/red]")
+        return True
+
+    from tasks.json_to_java.langgraph_agent import build_graph
+
+    state = {
+        "doc_path": opts.doc_path,
+        "word_service_url": opts.word_url,
+        "java_service_url": opts.java_url,
+        "package": opts.package,
+        "class_name": opts.class_name,
+        "max_depth": opts.max_depth,
+        "output_path": opts.output_path,
+    }
+    app = build_graph().compile()
+    result = app.invoke(state)
+    java_code = result.get("java_code")
+    output_path = result.get("output_path")
+    if output_path:
+        console.print(f"[green]Java 已写入: {output_path}[/green]")
+    if java_code:
+        console.print(Panel(Markdown(f"```java\n{java_code}\n```"), title="Java Output", border_style="green"))
+    return True
+
+
 def handle_mode_command(raw_command: str):
     """Switch between online/cloud mode and offline MCP mode."""
     command = (raw_command or "").strip()
@@ -642,6 +682,18 @@ def main():
                     title="📜 Chat History",
                     border_style="yellow"
                 ))
+                continue
+            elif cmd == 'agent':
+                sub = cmd_rest[0] if cmd_rest else ""
+                sub_parts = sub.split()
+                if not sub_parts:
+                    console.print("[red]Usage: /agent doc2java <doc_path> [...options][/red]")
+                    continue
+                agent_name, *agent_args = sub_parts
+                if agent_name == 'doc2java':
+                    run_doc2java_agent(agent_args)
+                    continue
+                console.print(f"[red]Unknown agent: {agent_name}[/red]")
                 continue
             elif cmd == 'help':
                 show_help()

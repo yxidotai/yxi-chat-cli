@@ -274,12 +274,20 @@ inline void from_json(const nlohmann::json& j, CppBotConfig& value) {
 # uv run python tasks/json_to_java/mcp_service.py
 
 # 运行智能体
+
+```
 uv run python tasks/json_to_java/langgraph_agent.py ./samples/demo.docx \
   --word-url http://localhost:8000 \
   --java-url http://localhost:8030 \
   --package com.example.demo \
   --class-name Root \
   --output-path /tmp/Output.java
+```
+
+智能体调用文档转代码
+```
+/agent doc2java ./samples/demo.docx --word-url http://localhost:8000 --java-url http://localhost:8030 --package com.example.demo --class-name Root --output-path /tmp/Output.java
+```
 
 ## ⚠️ 免责声明
 
