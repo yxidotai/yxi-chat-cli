@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import os
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -127,6 +128,6 @@ def invoke_tool(request: InvokeRequest) -> Dict[str, Any]:
 if __name__ == "__main__":
     import uvicorn
 
-    host = "0.0.0.0"
-    port = 8000
+    host = os.getenv("WORD_MCP_HOST", "0.0.0.0")
+    port = int(os.getenv("WORD_MCP_PORT", "8000"))
     uvicorn.run("mcp_service:app", host=host, port=port, reload=False)

@@ -165,8 +165,9 @@ def invoke_tool(request: InvokeRequest) -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
+    import os
     import uvicorn
 
-    host = "0.0.0.0"
-    port = 8030
+    host = os.getenv("JSON_TO_JAVA_HOST", "0.0.0.0")
+    port = int(os.getenv("JSON_TO_JAVA_PORT", "8030"))
     uvicorn.run("mcp_service:app", host=host, port=port, reload=False)

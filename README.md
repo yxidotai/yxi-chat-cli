@@ -274,7 +274,7 @@ inline void from_json(const nlohmann::json& j, CppBotConfig& value) {
 # uv run python tasks/json_to_java/mcp_service.py
 
 # 运行智能体
-
+直接使用 uv 运行
 ```
 uv run python tasks/json_to_java/langgraph_agent.py ./samples/demo.docx \
   --word-url http://localhost:8000 \
@@ -289,6 +289,23 @@ uv run python tasks/json_to_java/langgraph_agent.py ./samples/demo.docx \
 /agent doc2java ./samples/demo.docx --word-url http://localhost:8000 --java-url http://localhost:8030 --package com.example.demo --class-name Root --output-path /tmp/Output.java
 ```
 
+
+使用 docker 运行
+```
+docker run --rm -p 8000:8000 -v "$PWD/samples:/data" yxi-word-mcp
+```
+
+```
+docker run --rm -p 8030:8030 -v "$PWD/output:/out" yxi-json-to-java
+```
+
+```
+/agent doc2java /data/demo.docx --word-url http://localhost:8000 --java-url http://localhost:8030 --package com.example.demo --class-name Root --output-path /out/Output.java 
+```
+另外一种运行方式
+```
+/agent doc2java /data/demo.docx --package com.example.demo --class-name Root --output-path /out/Output.java
+```
 ## ⚠️ 免责声明
 
 - 本项目为实验性工具，仅供学习与内部研发使用，不保证在生产环境中的稳定性与安全性。
