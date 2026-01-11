@@ -11,7 +11,9 @@ tasks/json_to_java/langgraph_agent.py
 tasks/json_to_java/mcp_service.py
 tasks/obsidian_mcp/__init__.py
 tasks/obsidian_mcp/mcp_service.py
+tasks/report_generator/__init__.py
 tasks/report_generator/generate_report.py
+tasks/service_deploy/__init__.py
 tasks/word_table_export/__init__.py
 tasks/word_table_export/export_tables.py
 tasks/word_table_export/mcp_service.py

@@ -1,43 +1,69 @@
 #!/bin/sh
 set -e
 
-# 安装到 /usr/local/bin (需要sudo)
-if [ "$(id -u)" != "0" ]; then
-  if ! command -v sudo >/dev/null 2>&1; then
-    echo "需要root权限或sudo支持才能安装" >&2
+REPO_URL="https://github.com/yxidotai/yxi-chat-cli.git"
+REPO_DIR="yxi-chat-cli"
+
+need_cmd() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "Missing required command: $1" >&2
     exit 1
   fi
-  echo "需要sudo权限安装到系统目录"
-  exec sudo ORIGINAL_USER_HOME="$HOME" "$0" "$@"
+}
+
+need_cmd git
+need_cmd curl
+need_cmd python3
+
+if ! python3 - <<'PY'
+import sys
+sys.exit(0 if sys.version_info >= (3, 11) else 1)
+PY
+then
+  echo "Python 3.11+ is required" >&2
+  exit 1
 fi
 
-# 解析真正的用户家目录，确保配置写入非root账户
-if [ -z "$ORIGINAL_USER_HOME" ] && [ -n "$SUDO_USER" ]; then
-  ORIGINAL_USER_HOME=$(eval echo "~$SUDO_USER")
+# Clone if not already inside the repo
+if [ ! -f "pyproject.toml" ] || [ ! -d ".git" ]; then
+  if [ ! -d "$REPO_DIR" ]; then
+    git clone "$REPO_URL" "$REPO_DIR"
+  fi
+  cd "$REPO_DIR"
 fi
-USER_HOME="${ORIGINAL_USER_HOME:-$HOME}"
 
-# 创建安装目录
-INSTALL_DIR="/usr/local/bin"
-BIN_NAME="yxi"
+# Install uv if missing
+if ! command -v uv >/dev/null 2>&1; then
+  echo "Installing uv..."
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  export PATH="$HOME/.local/bin:$PATH"
+fi
 
-# 复制二进制文件
-cp "bin/$BIN_NAME" "$INSTALL_DIR/"
-chmod +x "$INSTALL_DIR/$BIN_NAME"
+# Install dependencies
+if command -v uv >/dev/null 2>&1; then
+  uv sync
+else
+  need_cmd pip3
+  pip3 install -r requirements.txt
+fi
 
-# 创建配置目录
-CONFIG_DIR="$USER_HOME/.config/yxi"
-mkdir -p "$CONFIG_DIR"
+# Optional: create a user-level launcher if bin/yxi exists
+if [ -x "bin/yxi" ]; then
+  mkdir -p "$HOME/.local/bin"
+  ln -sf "$(pwd)/bin/yxi" "$HOME/.local/bin/yxi"
+  echo "Linked yxi to $HOME/.local/bin/yxi"
+fi
 
-# 设置自动更新脚本，默认从 GitHub Raw 获取最新 install.sh
-cat > "$CONFIG_DIR/update.sh" << 'EOF'
-#!/bin/sh
-set -e
+cat <<'EOF'
 
-curl -sL yxi.ai/install.sh | sh
+Install complete.
+- Activate env (uv handles venv automatically):
+    uv run python chatbot.py
+- Set API key if needed:
+    export YXI_API_KEY=your-key
+- Optional: build MCP Docker images (run from repo root):
+    docker build -f tasks/word_table_export/Dockerfile -t yxi-word-mcp .
+    docker build -f tasks/json_to_java/Dockerfile -t yxi-json-to-java .
+- Agent example (services running on host ports 8000/8030):
+    /agent doc2java /data/demo.docx --word-url http://localhost:8000 --java-url http://localhost:8030 --package com.example.demo --class-name Root --output-path /out/Output.java
 EOF
-chmod +x "$CONFIG_DIR/update.sh"
-
-echo "✓ 已安装到 $INSTALL_DIR/$BIN_NAME"
-echo "✓ 配置目录: $CONFIG_DIR"
-echo "✓ 可使用 'yxi update' 获取最新版本"
