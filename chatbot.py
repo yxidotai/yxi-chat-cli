@@ -38,6 +38,7 @@ chat_state = {
     "offline_node": None,
     "model": MODEL,
     "api_key": API_KEY,
+    "api_base": API_BASE,
 }
 
 
@@ -64,11 +65,16 @@ def current_model() -> str:
     return chat_state.get("model") or MODEL
 
 
+def current_api_base() -> str:
+    return chat_state.get("api_base") or API_BASE
+
+
 def show_help():
     """Render a quick reference of available commands."""
     lines = [
         "[bold]/help[/bold] — 显示本帮助",
         "[bold]/apikey set|clear[/bold] — 设置或清除云端 API key",
+        "[bold]/baseurl set|clear[/bold] — 设置或清除云端 API Base URL",
         "[bold]/model list|use|default[/bold] — 查看或切换云端模型",
         "[bold]/mode online|offline <node>[/bold] — 切换在线/离线模式",
         "[bold]/mcp ...[/bold] — 管理 MCP 节点（add/list/use/remove/tools/invoke）",
@@ -91,7 +97,7 @@ def fetch_model_list() -> List[Dict[str, Any]]:
 
     headers = {"Authorization": f"Bearer {current_api_key()}"}
     try:
-        response = requests.get(f"{API_BASE}/models", headers=headers, timeout=15)
+        response = requests.get(f"{current_api_base()}/models", headers=headers, timeout=15)
         response.raise_for_status()
         payload = response.json()
     except requests.RequestException as exc:
@@ -223,6 +229,9 @@ if config_state.get("default_model"):
 stored_api_key = config_state.get("api_key")
 if stored_api_key and not ENV_API_KEY:
     chat_state["api_key"] = stored_api_key
+stored_api_base = config_state.get("api_base_url")
+if stored_api_base and not os.getenv("YXI_API_BASE_URL"):
+    chat_state["api_base"] = stored_api_base
 
 def stream_completion(messages):
     """流式调用 yxi.ai API"""
@@ -243,7 +252,7 @@ def stream_completion(messages):
     
     try:
         with requests.post(
-            f"{API_BASE}/chat/completions",
+            f"{current_api_base()}/chat/completions",
             json=data,
             headers=headers,
             stream=True,
@@ -448,6 +457,74 @@ def handle_api_key_command(raw_command: str):
     return True
 
 
+def handle_set_apikey_command(raw_command: str):
+    """Handle '/setapikey <key>' convenience command."""
+    arg = (raw_command or "").strip()
+    if not arg:
+        console.print("[red]Usage: /setapikey <value>[/red]")
+        return True
+    chat_state["api_key"] = arg
+    config_state["api_key"] = arg
+    save_config(config_state)
+    console.print("[green]API key 已更新（保存在 ~/.yxi_chat_config.json，纯文本存储，请注意风险）。[/green]")
+    return True
+
+
+def handle_set_baseurl_command(raw_command: str):
+    """Handle '/setbaseurl <url>' to update API base URL."""
+    url = (raw_command or "").strip()
+    if not url:
+        console.print("[red]Usage: /setbaseurl <url>[/red]")
+        return True
+    # rudimentary validation
+    if not re.match(r"^https?://", url):
+        console.print("[red]无效 URL：请以 http:// 或 https:// 开头[/red]")
+        return True
+    chat_state["api_base"] = url.rstrip("/")
+    config_state["api_base_url"] = chat_state["api_base"]
+    save_config(config_state)
+    console.print(f"[green]API Base URL 已更新为 {chat_state['api_base']}[/green]")
+    return True
+
+
+def handle_baseurl_command(raw_command: str):
+    """Manage API base URL: '/baseurl set <url>' or '/baseurl clear'."""
+    command = (raw_command or "").strip()
+    if not command:
+        console.print(f"[cyan]当前 API Base：{current_api_base()}[/cyan]")
+        console.print("[yellow]Usage: /baseurl set <url> | /baseurl clear[/yellow]")
+        return True
+
+    action, *rest = command.split(maxsplit=1)
+    action = action.lower()
+
+    if action == "set":
+        if not rest:
+            console.print("[red]Usage: /baseurl set <url>[/red]")
+            return True
+        url = rest[0].strip()
+        if not re.match(r"^https?://", url):
+            console.print("[red]无效 URL：请以 http:// 或 https:// 开头[/red]")
+            return True
+        chat_state["api_base"] = url.rstrip("/")
+        config_state["api_base_url"] = chat_state["api_base"]
+        save_config(config_state)
+        console.print(f"[green]API Base URL 已更新为 {chat_state['api_base']}[/green]")
+        return True
+
+    if action in {"clear", "remove"}:
+        # Remove persisted value and fall back to env/default
+        if config_state.pop("api_base_url", None) is not None:
+            save_config(config_state)
+        fallback = os.getenv("YXI_API_BASE_URL") or API_BASE
+        chat_state["api_base"] = fallback
+        console.print(f"[yellow]API Base URL 已清除，当前生效：{chat_state['api_base']}[/yellow]")
+        return True
+
+    console.print(f"[red]Unknown baseurl action: {action}[/red]")
+    return True
+
+
 def run_doc2java_agent(args: List[str]):
     """Run the langgraph doc->java agent from terminal."""
     parser = argparse.ArgumentParser(prog="/agent doc2java", add_help=False)
@@ -643,24 +720,38 @@ def main():
             save_history(messages)
             sys.exit(0)
 
-        if user_input.lower().startswith('/mcp'):
+        lower_input = user_input.lower()
+
+        if lower_input == '/mcp' or lower_input.startswith('/mcp '):
             handle_mcp_command(user_input[4:], messages)
             continue
 
         # 处理特殊命令
-        if user_input.lower().startswith('/mode'):
+        if lower_input == '/mode' or lower_input.startswith('/mode '):
             handle_mode_command(user_input[5:])
             continue
 
-        if user_input.lower().startswith('/apikey'):
+        if lower_input == '/apikey' or lower_input.startswith('/apikey '):
             handle_api_key_command(user_input[7:])
             continue
 
-        if user_input.lower().startswith('/model'):
+        if lower_input == '/baseurl' or lower_input.startswith('/baseurl '):
+            handle_baseurl_command(user_input[8:])
+            continue
+
+        if lower_input == '/setapikey' or lower_input.startswith('/setapikey '):
+            handle_set_apikey_command(user_input[11:])
+            continue
+
+        if lower_input == '/setbaseurl' or lower_input.startswith('/setbaseurl '):
+            handle_set_baseurl_command(user_input[11:])
+            continue
+
+        if lower_input == '/model' or lower_input.startswith('/model '):
             handle_model_command(user_input[6:])
             continue
 
-        if user_input.lower().startswith('/copy') or user_input.lower().startswith('/c'):
+        if lower_input == '/copy' or lower_input.startswith('/copy ') or lower_input == '/c' or lower_input.startswith('/c '):
             handle_copy_command(messages)
             continue
 
