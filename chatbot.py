@@ -84,6 +84,7 @@ def show_help():
         "[bold]/exit[/bold] — 退出并保存",
         "离线模式下直接输入 `<tool> <json>` 即可调用 MCP 工具",
         "[bold]/agent doc2java <doc_path> [--word-url ... --java-url ... --package ... --class-name ... --output-path ...][/bold]",
+        "[bold]/agent test-ui <test-case.xlsx> [--playwright-url ... --base-url ... --output-dir ... --headed --browser ...][/bold]",
     ]
     panel = Panel("\n".join(lines), title="指令速查", border_style="cyan")
     console.print(panel)
@@ -563,6 +564,92 @@ def run_doc2java_agent(args: List[str]):
     return True
 
 
+def run_test_ui_agent(args: List[str]):
+    """Run the Playwright UI testing agent from terminal."""
+    parser = argparse.ArgumentParser(prog="/agent test-ui", add_help=False)
+    parser.add_argument("test_case_path")
+    parser.add_argument("--playwright-url", default="http://localhost:8040")
+    parser.add_argument("--base-url", dest="base_url", default=None)
+    parser.add_argument("--output-dir", dest="output_dir", default=None)
+    parser.add_argument("--browser", choices=["chromium", "firefox", "webkit"], default="chromium")
+    parser.add_argument("--slow-mo", dest="slow_mo", type=int, default=0)
+    parser.add_argument("--timeout-ms", dest="timeout_ms", type=int, default=10000)
+    parser.add_argument("--headed", action="store_true")
+    parser.add_argument("--write-script", dest="write_script", default=None)
+    try:
+        opts = parser.parse_args(args)
+    except SystemExit:
+        console.print(
+            "[red]用法: /agent test-ui <test-case.xlsx> [--playwright-url ... --base-url ... --output-dir ... --headed --browser ...][/red]"
+        )
+        return True
+
+    test_path = os.path.expanduser(opts.test_case_path)
+    if not os.path.exists(test_path):
+        console.print(f"[red]找不到测试用例文件: {test_path}[/red]")
+        return True
+
+    try:
+        from tasks.test_ui.generate_tests import PlaywrightOptions, generate_playwright_script, load_cases_from_excel
+    except Exception as exc:
+        console.print(f"[red]无法加载 Playwright 依赖: {exc}[/red]")
+        return True
+
+    try:
+        cases = load_cases_from_excel(test_path)
+    except Exception as exc:
+        console.print(f"[red]解析 Excel 失败: {exc}[/red]")
+        return True
+
+    options = PlaywrightOptions(
+        headless=not opts.headed,
+        slow_mo=max(opts.slow_mo, 0),
+        timeout_ms=max(opts.timeout_ms, 1000),
+        base_url=opts.base_url,
+        output_dir=opts.output_dir,
+        browser=opts.browser,
+    )
+
+    script_text = generate_playwright_script(cases, options)
+    url = opts.playwright_url.rstrip("/") + "/tools/playwright_run"
+    payload = {
+        "input": {
+            "script_text": script_text,
+            "cases": cases,
+            "options": {
+                "headless": options.headless,
+                "slow_mo": options.slow_mo,
+                "timeout_ms": options.timeout_ms,
+                "base_url": options.base_url,
+                "output_dir": options.output_dir,
+                "browser": options.browser,
+            },
+            "write_script_path": opts.write_script,
+        }
+    }
+
+    try:
+        response = requests.post(url, json=payload, timeout=300)
+        response.raise_for_status()
+        data = response.json()
+    except requests.RequestException as exc:
+        console.print(f"[red]Playwright MCP 调用失败: {exc}[/red]")
+        return True
+    except ValueError:
+        console.print("[red]Playwright MCP 返回了无效 JSON。[/red]")
+        return True
+
+    formatted = _format_json_blob(data)
+    console.print(
+        Panel(
+            Markdown(f"```json\n{formatted}\n```"),
+            title="Playwright Test Result",
+            border_style="green",
+        )
+    )
+    return True
+
+
 def handle_mode_command(raw_command: str):
     """Switch between online/cloud mode and offline MCP mode."""
     command = (raw_command or "").strip()
@@ -783,6 +870,9 @@ def main():
                 agent_name, *agent_args = sub_parts
                 if agent_name == 'doc2java':
                     run_doc2java_agent(agent_args)
+                    continue
+                if agent_name in {"test-ui", "testui", "test_ui"}:
+                    run_test_ui_agent(agent_args)
                     continue
                 console.print(f"[red]Unknown agent: {agent_name}[/red]")
                 continue

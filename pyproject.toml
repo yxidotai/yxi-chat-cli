@@ -6,6 +6,9 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.111.0",
+    "openpyxl>=3.1.0",
+    "pandas>=2.2.0",
+    "playwright>=1.48.0",
     "requests>=2.32.5",
     "rich>=14.2.0",
     "python-docx>=1.1.0",
@@ -29,5 +32,6 @@ packages = [
     "tasks.report_generator",
     "tasks.service_deploy",
     "tasks.json_to_java",
+    "tasks.test_ui",
 ]
 py-modules = ["chatbot", "main", "mcp_client", "task_scheduler"]
