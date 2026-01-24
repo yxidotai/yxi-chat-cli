@@ -584,45 +584,17 @@ def run_test_ui_agent(args: List[str]):
         )
         return True
 
-    test_path = os.path.expanduser(opts.test_case_path)
-    if not os.path.exists(test_path):
-        console.print(f"[red]找不到测试用例文件: {test_path}[/red]")
-        return True
-
-    try:
-        from tasks.test_ui.generate_tests import PlaywrightOptions, generate_playwright_script, load_cases_from_excel
-    except Exception as exc:
-        console.print(f"[red]无法加载 Playwright 依赖: {exc}[/red]")
-        return True
-
-    try:
-        cases = load_cases_from_excel(test_path)
-    except Exception as exc:
-        console.print(f"[red]解析 Excel 失败: {exc}[/red]")
-        return True
-
-    options = PlaywrightOptions(
-        headless=not opts.headed,
-        slow_mo=max(opts.slow_mo, 0),
-        timeout_ms=max(opts.timeout_ms, 1000),
-        base_url=opts.base_url,
-        output_dir=opts.output_dir,
-        browser=opts.browser,
-    )
-
-    script_text = generate_playwright_script(cases, options)
     url = opts.playwright_url.rstrip("/") + "/tools/playwright_run"
     payload = {
         "input": {
-            "script_text": script_text,
-            "cases": cases,
+            "excel_path": os.path.expanduser(opts.test_case_path),
             "options": {
-                "headless": options.headless,
-                "slow_mo": options.slow_mo,
-                "timeout_ms": options.timeout_ms,
-                "base_url": options.base_url,
-                "output_dir": options.output_dir,
-                "browser": options.browser,
+                "headless": not opts.headed,
+                "slow_mo": max(opts.slow_mo, 0),
+                "timeout_ms": max(opts.timeout_ms, 1000),
+                "base_url": opts.base_url,
+                "output_dir": opts.output_dir,
+                "browser": opts.browser,
             },
             "write_script_path": opts.write_script,
         }

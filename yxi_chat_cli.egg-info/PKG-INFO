@@ -5,6 +5,9 @@ Summary: Lightweight terminal chat CLI with MCP integration
 Requires-Python: >=3.11
 Description-Content-Type: text/markdown
 Requires-Dist: fastapi>=0.111.0
+Requires-Dist: openpyxl>=3.1.0
+Requires-Dist: pandas>=2.2.0
+Requires-Dist: playwright>=1.48.0
 Requires-Dist: requests>=2.32.5
 Requires-Dist: rich>=14.2.0
 Requires-Dist: python-docx>=1.1.0
@@ -246,6 +249,46 @@ docker run --rm -p 8030:8030 -v "$PWD/output:/out" yxi-json-to-java
 ```
 
 若使用本机文件且直接运行本地服务，可将文档路径换为宿主机绝对路径，输出路径换为本机可写目录（例如 `/tmp/Output.java`）。
+
+## Playwright UI 测试 agent
+
+### 1) Docker 方式运行 Playwright MCP
+
+```bash
+docker build -f tasks/test_ui/Dockerfile -t yxi-playwright-mcp .
+docker run --rm -p 8040:8040 \
+  -v "$PWD/samples:/data" \
+  -v "$PWD/output:/out" \
+  yxi-playwright-mcp
+```
+
+### 2) Excel 测试用例格式（推荐列名）
+
+建议使用以下列名（大小写不敏感）：
+
+- `case_id` / `case` / `test_id`：用例编号
+- `title` / `name`：用例标题
+- `action`：步骤动作（goto/click/fill/press/expect_text/expect_visible/wait/screenshot）
+- `selector`：元素定位（CSS/XPath）
+- `value`：输入值或断言文本
+- `url`：访问 URL（可为相对路径，会与 `--base-url` 组合）
+- `wait_ms`：等待毫秒
+
+### 3) 运行测试
+
+```bash
+/agent test-ui /data/test-case.xlsx \
+  --playwright-url http://localhost:8040 \
+  --base-url https://example.com \
+  --output-dir /out \
+  --browser chromium
+```
+
+说明：
+
+- `test-case.xlsx` 必须是 Playwright MCP 容器可见路径（如 `/data`）。
+- 若需有界面运行，可加 `--headed`。
+- 运行完成后，结果会以 JSON 形式输出。
 
 ## MCP 工具接口摘要
 

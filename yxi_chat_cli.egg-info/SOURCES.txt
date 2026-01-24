@@ -14,6 +14,9 @@ tasks/obsidian_mcp/mcp_service.py
 tasks/report_generator/__init__.py
 tasks/report_generator/generate_report.py
 tasks/service_deploy/__init__.py
+tasks/test_ui/__init__.py
+tasks/test_ui/generate_tests.py
+tasks/test_ui/mcp_service.py
 tasks/word_table_export/__init__.py
 tasks/word_table_export/export_tables.py
 tasks/word_table_export/mcp_service.py
