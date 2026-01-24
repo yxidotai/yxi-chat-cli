@@ -241,6 +241,7 @@ docker run --rm -p 8030:8030 -v "$PWD/output:/out" yxi-json-to-java
 ```bash
 docker build -f tasks/test_ui/Dockerfile -t yxi-playwright-mcp .
 docker run --rm -p 8040:8040 \
+  -p 5900:5900 \
   -v "$PWD/samples:/data" \
   -v "$PWD/output:/out" \
   yxi-playwright-mcp
@@ -266,7 +267,11 @@ docker run --rm -p 8040:8040 \
   --playwright-url http://localhost:8040 \
   --base-url https://example.com \
   --output-dir /out \
-  --browser chromium
+  --headed --browser chromium
+```
+
+```bash
+/agent test-ui /data/test-case.xlsx --playwright-url http://localhost:8040 --base-url https://www.jd.com --output-dir /out --browser chromium --headed
 ```
 
 说明：
