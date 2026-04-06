@@ -14,11 +14,14 @@ dependencies = [
     "python-docx>=1.1.0",
     "uvicorn>=0.30.0",
     "langgraph>=0.2.27",
+    "websockets>=12.0",
+    "jinja2>=3.1.0",
 ]
 
 [project.scripts]
 yxi-chat = "chatbot:main"
 yxi = "chatbot:main"
+yxi-web = "server:main"
 
 [build-system]
 requires = ["setuptools>=61", "wheel"]
@@ -34,4 +37,4 @@ packages = [
     "tasks.json_to_java",
     "tasks.test_ui",
 ]
-py-modules = ["chatbot", "main", "mcp_client", "task_scheduler"]
+py-modules = ["chatbot", "main", "mcp_client", "task_scheduler", "chatbot_adapter", "server"]

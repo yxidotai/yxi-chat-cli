@@ -1,5 +1,7 @@
 chatbot
+chatbot_adapter
 main
 mcp_client
+server
 task_scheduler
 tasks

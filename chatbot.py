@@ -7,6 +7,11 @@ import json
 import re
 import subprocess
 import sys
+import time
+import threading
+import webbrowser
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from urllib.parse import urlparse, parse_qs
 from typing import Any, Dict, List
 
 import requests
@@ -19,6 +24,34 @@ import argparse
 
 from mcp_client import MCPClient
 
+
+class CallbackHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        parsed = urlparse(self.path)
+        if parsed.path == "/callback":
+            params = parse_qs(parsed.query)
+            if "apiKey" in params:
+                with open(TOKEN_FILE, "w") as f:
+                    f.write(params["apiKey"][0])
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"Login successful! You can close this window.")
+            elif params.get("error") == ["unauthorized"]:
+                self.send_response(401)
+                self.end_headers()
+                self.wfile.write(b"Login failed. Please try again.")
+
+    def log_message(self, format, *args):
+        pass
+
+
+def start_callback_server(port=8765):
+    server = HTTPServer(("localhost", port), CallbackHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server
+
+
 # 配置 (实际产品中应从 ~/.yxi/config 读取)
 API_BASE = os.getenv("YXI_API_BASE_URL", "https://yxi.ai/v1")  # 可使用 YXI_API_BASE_URL 覆盖
 ENV_API_KEY = os.getenv("YXI_API_KEY")
@@ -26,6 +59,7 @@ API_KEY = ENV_API_KEY or "YOUR_API_KEY_HERE"
 MODEL = os.getenv("YXI_MODEL", "yxi-7b-terminal")
 HISTORY_FILE = os.path.expanduser("~/.yxi_chat_history.json")
 CONFIG_FILE = os.path.expanduser("~/.yxi_chat_config.json")
+TOKEN_FILE = os.path.expanduser("~/.yxi_token")
 
 console = Console()
 mcp_client = MCPClient()
@@ -50,7 +84,20 @@ def _format_json_blob(payload):
         return str(payload)
 
 
+def load_token() -> str:
+    if os.path.exists(TOKEN_FILE):
+        with open(TOKEN_FILE) as f:
+            return f.read().strip()
+    return ""
+
+
 def current_api_key() -> str:
+    # 优先使用 token 文件
+    token = load_token()
+    if token:
+        return token
+    
+    # 回退到配置文件的 api_key
     key = chat_state.get("api_key") or ""
     if key == "YOUR_API_KEY_HERE":
         return ""
@@ -73,6 +120,8 @@ def show_help():
     """Render a quick reference of available commands."""
     lines = [
         "[bold]/help[/bold] — 显示本帮助",
+        "[bold]/login[/bold] — 打开浏览器登录（OAuth 回调）",
+        "[bold]/logout[/bold] — 清除已保存的登录 Token",
         "[bold]/apikey set|clear[/bold] — 设置或清除云端 API key",
         "[bold]/baseurl set|clear[/bold] — 设置或清除云端 API Base URL",
         "[bold]/model list|use|default[/bold] — 查看或切换云端模型",
@@ -186,6 +235,7 @@ def handle_model_command(raw_command: str):
     console.print(f"[red]Unknown model action: {action}[/red]")
     return True
 
+
 def load_history():
     """加载历史对话"""
     if os.path.exists(HISTORY_FILE):
@@ -195,6 +245,7 @@ def load_history():
         except:
             return []
     return [{"role": "system", "content": "你是一个终端助手，用简洁专业的语言回答问题。代码用Markdown格式。"}]
+
 
 def save_history(messages):
     """保存对话历史"""
@@ -233,6 +284,7 @@ if stored_api_key and not ENV_API_KEY:
 stored_api_base = config_state.get("api_base_url")
 if stored_api_base and not os.getenv("YXI_API_BASE_URL"):
     chat_state["api_base"] = stored_api_base
+
 
 def stream_completion(messages):
     """流式调用 yxi.ai API"""
@@ -764,6 +816,7 @@ def handle_copy_command(messages: List[Dict[str, Any]]):
         console.print("[red]复制失败：未找到 pbcopy（仅支持 macOS 默认环境）。[/red]")
     return True
 
+
 def main():
     console.print("[bold green]🚀 yxi chat (prototype) - Type /exit to quit, /clear to reset context[/bold green]\n")
     
@@ -851,6 +904,32 @@ def main():
             elif cmd == 'help':
                 show_help()
                 continue
+            elif cmd == "login":
+                console.print("[bold green]🔐 正在打开登录页面...[/bold green]")
+                server = start_callback_server(8765)
+                login_url = "https://yxi.ai/login?redirect_uri=http://localhost:8765/callback"
+                webbrowser.open(login_url)
+                console.print("[yellow]⏳ 请在浏览器中完成登录...[/yellow]")
+                timeout = 300
+                elapsed = 0
+                while elapsed < timeout:
+                    time.sleep(2)
+                    token = load_token()
+                    if token:
+                        console.print("[bold green]✅ 登录成功！Token 已保存。[/bold green]")
+                        break
+                    elapsed += 2
+                else:
+                    console.print("[bold red]❌ 登录超时，请重试。[/bold red]")
+                server.shutdown()
+                continue
+            elif cmd == "logout":
+                if os.path.exists(TOKEN_FILE):
+                    os.remove(TOKEN_FILE)
+                    console.print("[bold green]✅ 已清除登录 Token。[/bold green]")
+                else:
+                    console.print("[yellow]没有已保存的 Token。[/yellow]")
+                continue
             else:
                 console.print(f"[bold red]❓ Unknown command: /{cmd}[/bold red]")
                 continue
@@ -870,6 +949,7 @@ def main():
             messages.append({"role": "assistant", "content": reply})
             
         console.print()  # 空行分隔
+
 
 if __name__ == "__main__":
     # 检查 API 密钥

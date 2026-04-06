@@ -1,8 +1,10 @@
 README.md
 chatbot.py
+chatbot_adapter.py
 main.py
 mcp_client.py
 pyproject.toml
+server.py
 task_scheduler.py
 tasks/__init__.py
 tasks/json_to_java/__init__.py

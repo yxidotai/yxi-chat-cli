@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="yxi-chat-cli - Lightweight terminal automation assistant">
+    <title>yxi-chat-cli - Web Interface</title>
+    <link rel="stylesheet" href="/static/lib/prism.css">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <h1 class="app-title">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    yxi-chat-cli
+                </h1>
+                <span class="app-version">v0.1.0</span>
+            </div>
+            <div class="header-right">
+                <div class="connection-status" id="connection-status">
+                    <span class="status-dot status-disconnected"></span>
+                    <span class="status-text">Disconnected</span>
+                </div>
+                <div class="mode-toggle" id="mode-toggle">
+                    <span class="mode-text" id="mode-text">Online</span>
+                    <div class="mode-switch">
+                        <input type="checkbox" id="mode-switch-input" checked>
+                        <span class="mode-slider"></span>
+                    </div>
+                </div>
+                <button class="header-btn" id="new-chat-btn" title="New Chat">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                </button>
+                <button class="header-btn" id="settings-btn" title="Settings">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Chat History Sidebar -->
+            <aside class="history-sidebar" id="history-sidebar">
+                <div class="sidebar-header">
+                    <h3>Chat History</h3>
+                    <button class="sidebar-toggle" id="sidebar-toggle">◀</button>
+                </div>
+                <div class="history-list" id="history-list">
+                    <!-- History items will be dynamically added here -->
+                </div>
+                <div class="history-actions">
+                    <button id="clear-all-history" class="btn btn-sm btn-outline" title="Clear All History">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                        Clear All
+                    </button>
+                </div>
+            </aside>
+
+            <!-- Settings Sidebar -->
+            <aside class="settings-sidebar" id="settings-sidebar">
+                <div class="sidebar-header">
+                    <h3>Configuration</h3>
+                    <button class="sidebar-close" id="settings-sidebar-close">◀</button>
+                </div>
+                <div class="sidebar-content">
+                    <!-- API Configuration -->
+                    <div class="config-section">
+                        <h4>API Configuration</h4>
+                        <div class="form-group">
+                            <label for="api-key">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                </svg>
+                                API Key
+                            </label>
+                            <input type="password" id="api-key" placeholder="Enter your API key">
+                            <button id="save-api-key" class="btn btn-sm">Save</button>
+                        </div>
+                        <div class="form-group">
+                            <label for="api-base">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <line x1="2" y1="12" x2="22" y2="12"></line>
+                                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                                </svg>
+                                API Base URL
+                            </label>
+                            <input type="text" id="api-base" placeholder="https://api.yxi.ai/v1">
+                            <button id="save-api-base" class="btn btn-sm">Save</button>
+                        </div>
+                        <div class="form-group">
+                            <label for="model-select">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                                    <path d="M2 17l10 5 10-5"></path>
+                                    <path d="M2 12l10 5 10-5"></path>
+                                </svg>
+                                Model
+                            </label>
+                            <select id="model-select">
+                                <option value="yxi-7b-terminal">yxi-7b-terminal</option>
+                            </select>
+                            <button id="save-model" class="btn btn-sm">Save</button>
+                        </div>
+                    </div>
+
+                    <!-- MCP Configuration -->
+                    <div class="config-section">
+                        <h4>MCP Nodes</h4>
+                        <div class="mcp-nodes" id="mcp-nodes">
+                            <!-- MCP nodes will be dynamically added here -->
+                        </div>
+                        <button id="add-mcp-node" class="btn btn-sm btn-outline">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                            Add Node
+                        </button>
+                    </div>
+
+                    <!-- Shortcuts -->
+                    <div class="config-section">
+                        <h4>Keyboard Shortcuts</h4>
+                        <div class="shortcut-list">
+                            <div class="shortcut-item">
+                                <kbd>Enter</kbd>
+                                <span>Send message</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>Ctrl</kbd>+<kbd>Enter</kbd>
+                                <span>New line</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>↑</kbd> / <kbd>↓</kbd>
+                                <span>Previous/Next message</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>/</kbd>
+                                <span>Focus input</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>Esc</kbd>
+                                <span>Clear selection</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="config-section">
+                        <h4>Actions</h4>
+                        <button id="get-help" class="btn btn-sm btn-outline">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                            </svg>
+                            Help
+                        </button>
+                        <button id="export-chat" class="btn btn-sm btn-outline">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                            Export Chat
+                        </button>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Chat Container -->
+            <main class="chat-container">
+                <!-- Welcome Screen -->
+                <div class="welcome-screen" id="welcome-screen">
+                    <div class="welcome-content">
+                        <div class="welcome-icon">
+                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                            </svg>
+                        </div>
+                        <h2>Welcome to yxi-chat-cli</h2>
+                        <p>A lightweight terminal automation assistant with MCP integration</p>
+                        <div class="welcome-suggestions">
+                            <div class="suggestion-card" data-prompt="Help me with some commands">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                </svg>
+                                <span>Help me with commands</span>
+                            </div>
+                            <div class="suggestion-card" data-prompt="Show me available MCP tools">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                                    <line x1="8" y1="21" x2="16" y2="21"></line>
+                                    <line x1="12" y1="17" x2="12" y2="21"></line>
+                                </svg>
+                                <span>Show MCP tools</span>
+                            </div>
+                            <div class="suggestion-card" data-prompt="How do I switch to offline mode?">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+                                    <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+                                    <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+                                    <line x1="12" y1="20" x2="12.01" y2="20"></line>
+                                </svg>
+                                <span>Switch to offline mode</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chat Messages -->
+                <div class="chat-messages hidden" id="chat-messages">
+                    <!-- Messages will be dynamically added here -->
+                </div>
+
+                <!-- Input Area -->
+                <div class="input-area">
+                    <div class="input-container">
+                        <div class="quick-actions" id="quick-actions">
+                            <button class="quick-action-btn" data-action="format" title="Format Code">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="21" y1="10" x2="3" y2="10"></line>
+                                    <line x1="21" y1="6" x2="3" y2="6"></line>
+                                    <line x1="21" y1="14" x2="3" y2="14"></line>
+                                    <line x1="21" y1="18" x2="3" y2="18"></line>
+                                </svg>
+                            </button>
+                            <button class="quick-action-btn" data-action="clear" title="Clear Input">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                        <textarea 
+                            id="message-input" 
+                            placeholder="Type your message here... (Press / for quick commands)"
+                            rows="1"
+                            maxlength="4000"
+                            autocomplete="off"
+                        ></textarea>
+                        <button id="send-btn" class="send-btn" title="Send message (Enter)">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="input-info">
+                        <span class="char-count" id="char-count">0/4000</span>
+                        <span class="typing-indicator hidden" id="typing-indicator">
+                            <span class="typing-dots">
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                            </span>
+                            Assistant is thinking...
+                        </span>
+                        <span class="shortcut-hint">Press <kbd>Enter</kbd> to send</span>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <!-- MCP Node Modal -->
+    <div id="mcp-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add MCP Node</h3>
+                <button class="modal-close" id="mcp-modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="mcp-name">Node Name</label>
+                    <input type="text" id="mcp-name" placeholder="MyMCPNode">
+                </div>
+                <div class="form-group">
+                    <label for="mcp-url">Node URL</label>
+                    <input type="text" id="mcp-url" placeholder="http://localhost:8000">
+                </div>
+                <div class="form-group">
+                    <label for="mcp-token">Auth Token (optional)</label>
+                    <input type="password" id="mcp-token" placeholder="Token if required">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="mcp-modal-cancel">Cancel</button>
+                <button class="btn" id="mcp-modal-save">Add Node</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Modal -->
+    <div id="help-modal" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3>Help & Commands</h3>
+                <button class="modal-close" id="help-modal-close">&times;</button>
+            </div>
+            <div class="modal-body" id="help-content">
+                <!-- Help content will be loaded dynamically -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn" id="help-modal-close-btn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rename Session Modal -->
+    <div id="rename-modal" class="modal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h3>Rename Chat</h3>
+                <button class="modal-close" id="rename-modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="session-name-input">Chat Name</label>
+                    <input type="text" id="session-name-input" placeholder="Enter chat name">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="rename-modal-cancel">Cancel</button>
+                <button class="btn" id="rename-modal-save">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container">
+        <!-- Toasts will be dynamically added here -->
+    </div>
+
+    <!-- Scripts -->
+    <script src="/static/lib/marked.min.js"></script>
+    <script src="/static/lib/prism.js"></script>
+    <script src="/static/lib/prism-javascript.js"></script>
+    <script src="/static/lib/prism-python.js"></script>
+    <script src="/static/lib/prism-json.js"></script>
+    <script src="/static/lib/prism-bash.js"></script>
+    <script src="/static/js/markdown-parser.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
