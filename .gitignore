@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# uv
+# uv.lock 应入库（锁依赖版本）
+
+# 构建产物
+build/
+dist/
+*.egg-info/
+*.egg
+
+# 环境变量
+.env
+.env.*
+!.env.example
+
+# 运行时生成的文件
+output/
+output.*
+merged.json
+*.out
+
+# 临时安装/构建目录
+tmp-bin/
+tmp-home/
+tmp/
+*.tmp
+
+# 测试与覆盖率
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Misc
+*.log
