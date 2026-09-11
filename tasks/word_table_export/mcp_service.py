@@ -128,6 +128,7 @@ def invoke_tool(request: InvokeRequest) -> Dict[str, Any]:
 if __name__ == "__main__":
     import uvicorn
 
-    host = os.getenv("WORD_MCP_HOST", "0.0.0.0")
+    # 默认仅回环监听;外部暴露需显式设置环境变量并自行承担风险
+    host = os.getenv("WORD_MCP_HOST", "127.0.0.1")
     port = int(os.getenv("WORD_MCP_PORT", "8000"))
     uvicorn.run("mcp_service:app", host=host, port=port, reload=False)

@@ -36,5 +36,8 @@ COPY tasks/test_ui/start.sh .
 RUN chmod +x start.sh
 
 EXPOSE 8040
+# VNC 端口:EXPOSE 仅声明,默认不发布。需要时显式绑定回环:
+#   docker run -p 127.0.0.1:5900:5900 ...
+# (start.sh 中 x11vnc 仅监听容器内回环,密码随机生成,可用 VNC_PASSWORD 覆盖)
 EXPOSE 5900
 CMD ["./start.sh"]

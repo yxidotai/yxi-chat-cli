@@ -14,9 +14,10 @@ def main():
     
     # Start the web server
     try:
+        # 默认仅回环监听;外部暴露需显式指定 --host 并自行承担风险
         process = subprocess.Popen([
-            sys.executable, "server.py", 
-            "--host", "0.0.0.0", 
+            sys.executable, "server.py",
+            "--host", "127.0.0.1",
             "--port", "8080"
         ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         

@@ -3,14 +3,17 @@
 REST API endpoints for yxi-chat-cli web interface
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from typing import Dict, Any, List, Optional
 import logging
 
 from chatbot_adapter import ChatbotAdapter
+from app.auth import require_session_token
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api", tags=["api"])
+
+# CLI-H4: /api 下所有端点统一要求会话令牌(Authorization / ?token= / cookie)
+router = APIRouter(prefix="/api", tags=["api"], dependencies=[Depends(require_session_token)])
 
 # Global adapter instance
 adapter = ChatbotAdapter()

@@ -10,6 +10,13 @@ from fastapi import WebSocket, WebSocketDisconnect
 import logging
 
 from chatbot_adapter import ChatbotAdapter
+from app.auth import (
+    WS_CLOSE_BAD_ORIGIN,
+    WS_CLOSE_UNAUTHORIZED,
+    extract_token_from_websocket,
+    is_origin_allowed,
+    token_matches,
+)
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -160,6 +167,19 @@ manager = WebSocketManager()
 
 async def websocket_endpoint(websocket: WebSocket):
     """FastAPI WebSocket endpoint"""
+    # CLI-H4: Origin 白名单校验(空 Origin 视为非浏览器客户端,放行)
+    origin = websocket.headers.get('origin')
+    if not is_origin_allowed(origin):
+        logger.warning('Rejected WebSocket with disallowed Origin: %s', origin)
+        await websocket.close(code=WS_CLOSE_BAD_ORIGIN)
+        return
+
+    # CLI-H4: 会话令牌校验(Authorization / ?token= / cookie)
+    if not token_matches(extract_token_from_websocket(websocket)):
+        logger.warning('Rejected WebSocket without valid session token')
+        await websocket.close(code=WS_CLOSE_UNAUTHORIZED)
+        return
+
     session_id = None
     try:
         session_id = await manager.connect(websocket)

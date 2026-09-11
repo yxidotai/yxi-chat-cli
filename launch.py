@@ -87,7 +87,8 @@ def main():
     parser = argparse.ArgumentParser(description="yxi-chat-cli Launcher")
     parser.add_argument("--mode", choices=["cli", "web", "both"], default="both",
                        help="Launch mode: cli-only, web-only, or both (default)")
-    parser.add_argument("--host", default="0.0.0.0", help="Web server host")
+    # 默认仅回环监听;外部暴露需显式指定 --host 并自行承担风险
+    parser.add_argument("--host", default="127.0.0.1", help="Web server host")
     parser.add_argument("--port", type=int, default=8080, help="Web server port")
     parser.add_argument("--reload", action="store_true", help="Enable auto-reload for web server")
     parser.add_argument("--web-only", action="store_true", help="Run web server in web-only mode")

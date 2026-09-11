@@ -168,6 +168,7 @@ if __name__ == "__main__":
     import os
     import uvicorn
 
-    host = os.getenv("JSON_TO_JAVA_HOST", "0.0.0.0")
+    # 默认仅回环监听;外部暴露需显式设置环境变量并自行承担风险
+    host = os.getenv("JSON_TO_JAVA_HOST", "127.0.0.1")
     port = int(os.getenv("JSON_TO_JAVA_PORT", "8030"))
     uvicorn.run("mcp_service:app", host=host, port=port, reload=False)

@@ -54,3 +54,6 @@ Thumbs.db
 
 # Misc
 *.log
+
+# VNC 密码文件(安全:禁止入库)
+tasks/test_ui/vncpasswd

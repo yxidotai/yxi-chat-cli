@@ -8,7 +8,7 @@ Features:
 Env vars:
 - OBSIDIAN_VAULT_DIR: path to your Obsidian vault (default: ./vault)
 - OBSIDIAN_MCP_TOKEN: optional bearer token required in Authorization header
-- HOST / PORT: optional FastAPI host/port settings (default 0.0.0.0:8025)
+- HOST / PORT: optional FastAPI host/port settings (default 127.0.0.1:8025)
 """
 
 from __future__ import annotations
@@ -137,6 +137,7 @@ def run_append(req: MCPRequest):
 if __name__ == "__main__":
     import uvicorn
 
-    host = os.getenv("HOST", "0.0.0.0")
+    # 默认仅回环监听;外部暴露需显式设置环境变量并自行承担风险
+    host = os.getenv("HOST", "127.0.0.1")
     port = int(os.getenv("PORT", "8025"))
     uvicorn.run("mcp_service:app", host=host, port=port, reload=False)
