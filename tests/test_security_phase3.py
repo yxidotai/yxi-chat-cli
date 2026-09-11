@@ -214,3 +214,17 @@ def test_oauth_callback_state_validation(tmp_path, monkeypatch):
         assert exc.value.code == 403
     finally:
         server.shutdown()
+
+
+def test_update_script_security_properties():
+    from pathlib import Path
+    s = Path("tmp-home/.config/yxi/update.sh").read_text()
+    # tag 固定,不再 main HEAD
+    assert "refs/heads/main" not in s
+    assert "YXI_CLI_VERSION" in s and "v0.1.0" in s
+    # 硬编码指纹 + 比对
+    assert "13AA700E001D91F396B84743037F2EA4E20640B6" in s
+    assert "fingerprint mismatch" in s
+    # fail-closed: 缺签名拒绝执行、缺 gpg 拒绝
+    assert "refusing to run unsigned installer" in s
+    assert "gpg required" in s
