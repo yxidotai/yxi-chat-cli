@@ -64,7 +64,9 @@ class MCPClient:
             "active": self.active_name if self.active_name in self.nodes else None,
             "nodes": {name: asdict(node) for name, node in self.nodes.items()},
         }
-        with open(self.config_path, "w", encoding="utf-8") as handle:
+        # v1.23.x (CLI-H6): 节点配置含 Bearer token,0600 权限落盘
+        fd = os.open(self.config_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
             json.dump(payload, handle, ensure_ascii=False, indent=2)
 
     # ------------------------------------------------------------------

@@ -3,7 +3,9 @@
 # 保存为 yxi_chat.py 后运行: chmod +x yxi_chat.py && ./yxi_chat.py
 
 import os
+import hmac
 import json
+import secrets
 import re
 import subprocess
 import sys
@@ -26,12 +28,27 @@ from mcp_client import MCPClient
 
 
 class CallbackHandler(BaseHTTPRequestHandler):
+    # v1.23.x (CLI-H5): 回调携带一次性 state,登录前写入本模块变量,
+    # 回调校验一致且仅消费一次 —— 防本机任意进程/恶意网页注入伪造 token。
+    expected_state = None
+
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path == "/callback":
             params = parse_qs(parsed.query)
+            state = params.get("state", [None])[0]
+            expected = CallbackHandler.expected_state
+            # state 消费一次(防重放)
+            CallbackHandler.expected_state = None
+            if not expected or not state or not hmac.compare_digest(state, expected):
+                self.send_response(403)
+                self.end_headers()
+                self.wfile.write(b"Invalid or expired login state. Please retry from the CLI.")
+                return
             if "apiKey" in params:
-                with open(TOKEN_FILE, "w") as f:
+                # v1.23.x (CLI-H6): 凭证文件 0600 权限
+                fd = os.open(TOKEN_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                with os.fdopen(fd, "w") as f:
                     f.write(params["apiKey"][0])
                 self.send_response(200)
                 self.end_headers()
@@ -248,8 +265,9 @@ def load_history():
 
 
 def save_history(messages):
-    """保存对话历史"""
-    with open(HISTORY_FILE, 'w') as f:
+    """保存对话历史(0600;含对话内容)"""
+    fd = os.open(HISTORY_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w') as f:
         json.dump(messages[-20:], f)  # 保留最近20条
 
 
@@ -267,9 +285,10 @@ def load_config() -> Dict[str, Any]:
 
 
 def save_config(config: Dict[str, Any]):
-    """Persist user preferences to disk."""
+    """Persist user preferences to disk (0600; 含 api_key 等敏感字段)."""
     try:
-        with open(CONFIG_FILE, 'w') as f:
+        fd = os.open(CONFIG_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, 'w') as f:
             json.dump(config, f, indent=2)
     except Exception as exc:
         console.print(f"[red]Unable to save config: {exc}[/red]")
@@ -907,7 +926,13 @@ def main():
             elif cmd == "login":
                 console.print("[bold green]🔐 正在打开登录页面...[/bold green]")
                 server = start_callback_server(8765)
-                login_url = "https://yxi.ai/login?redirect_uri=http://localhost:8765/callback"
+                # v1.23.x (CLI-H5): 一次性 state,回调时校验
+                login_state = secrets.token_urlsafe(24)
+                CallbackHandler.expected_state = login_state
+                login_url = (
+                    "https://yxi.ai/login?redirect_uri=http://localhost:8765/callback"
+                    f"&state={login_state}"
+                )
                 webbrowser.open(login_url)
                 console.print("[yellow]⏳ 请在浏览器中完成登录...[/yellow]")
                 timeout = 300

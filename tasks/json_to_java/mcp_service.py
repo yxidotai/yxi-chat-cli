@@ -5,8 +5,16 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel, Field
+
+try:
+    from ..mcp_auth import ensure_within, make_token_dependency, read_root, write_root
+except ImportError:  # pragma: no cover
+    from tasks.mcp_auth import ensure_within, make_token_dependency, read_root, write_root
+
+# v1.23.x (CLI-H1): /tools/* 强制 Bearer 令牌
+_token_dep = make_token_dependency("json_to_java", "JSON_TO_JAVA_TOKEN")
 
 try:
     from .generate_java import generate_java
@@ -80,7 +88,8 @@ def _load_json(payload: JsonToJavaInput) -> Any:
             raise HTTPException(status_code=400, detail=f"Invalid json_text: {exc}")
 
     if payload.json_path:
-        path = Path(payload.json_path).expanduser().resolve()
+        # v1.23.x (CLI-H1): 读取路径限制在白名单根目录内(MCP_ALLOW_READ_DIR,默认 ~)
+        path = ensure_within(read_root(), payload.json_path)
         if not path.exists():
             raise HTTPException(status_code=404, detail=f"File not found: {path}")
         try:
@@ -122,12 +131,12 @@ def healthcheck() -> Dict[str, str]:
     return {"status": "ok"}
 
 
-@app.get("/tools")
+@app.get("/tools", dependencies=[Depends(_token_dep)])
 def list_tools() -> Dict[str, Any]:
     return {"tools": [TOOL_DEFINITION]}
 
 
-@app.post(f"/tools/{TOOL_NAME}")
+@app.post(f"/tools/{TOOL_NAME}", dependencies=[Depends(_token_dep)])
 def invoke_tool(request: InvokeRequest) -> Dict[str, Any]:
     payload = request.input
     data = _load_json(payload)
@@ -144,7 +153,8 @@ def invoke_tool(request: InvokeRequest) -> Dict[str, Any]:
 
     written_to = None
     if payload.output_path:
-        out_path = Path(payload.output_path).expanduser().resolve()
+        # v1.23.x (CLI-H1): 写路径限制在白名单根目录内(原任意路径写可打 authorized_keys/crontab)
+        out_path = ensure_within(write_root(), payload.output_path)
         try:
             out_path.parent.mkdir(parents=True, exist_ok=True)
             out_path.write_text(java_code, encoding="utf-8")

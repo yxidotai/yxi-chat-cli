@@ -1,14 +1,20 @@
 """Playwright-based UI testing MCP service."""
 from __future__ import annotations
 
-import json
 import os
-import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel, Field
+
+try:
+    from ..mcp_auth import ensure_within, make_token_dependency, write_root
+except ImportError:  # pragma: no cover
+    from tasks.mcp_auth import ensure_within, make_token_dependency, write_root
+
+# v1.23.x (CLI-C1/H1): /tools/* 强制 Bearer 令牌(健康检查除外)
+_token_dep = make_token_dependency("test_ui", "PLAYWRIGHT_TOKEN")
 
 try:
     from .generate_tests import PlaywrightOptions, generate_playwright_script, load_cases_from_excel, run_cases
@@ -39,7 +45,6 @@ class PlaywrightOptionsModel(BaseModel):
 
 class PlaywrightInput(BaseModel):
     excel_path: Optional[str] = Field(default=None, description="Excel test case path, visible to the service")
-    script_text: Optional[str] = Field(default=None, description="Inline Playwright Python script text")
     cases: Optional[List[Dict[str, Any]]] = Field(default=None, description="Parsed test cases")
     options: PlaywrightOptionsModel = Field(default_factory=PlaywrightOptionsModel)
     write_script_path: Optional[str] = Field(default=None, description="Optional path to write generated script")
@@ -62,7 +67,7 @@ def healthcheck() -> Dict[str, str]:
     return {"status": "ok"}
 
 
-@app.get("/tools")
+@app.get("/tools", dependencies=[Depends(_token_dep)])
 def list_tools() -> Dict[str, Any]:
     return {"tools": [TOOL_DEFINITION]}
 
@@ -81,73 +86,46 @@ def _options_from_model(model: PlaywrightOptionsModel) -> PlaywrightOptions:
 def _write_script(script_text: str, path: Optional[str]) -> Optional[str]:
     if not path:
         return None
-    target = Path(path).expanduser().resolve()
+    # v1.23.x (CLI-H1): 写路径限制在白名单根目录内(MCP_ALLOW_WRITE_DIR,默认 ~/yxi-mcp-output)
+    target = ensure_within(write_root(), path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(script_text, encoding="utf-8")
     return str(target)
 
 
-def _execute_script(script_text: str) -> Dict[str, Any]:
-    with tempfile.TemporaryDirectory() as tmpdir:
-        script_path = Path(tmpdir) / "playwright_run.py"
-        script_path.write_text(script_text, encoding="utf-8")
-
-        import subprocess
-        import sys
-
-        result = subprocess.run(
-            [sys.executable, str(script_path)],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        output = result.stdout.strip() or result.stderr.strip()
-        try:
-            parsed = json.loads(output) if output else []
-        except json.JSONDecodeError:
-            parsed = output
-        return {
-            "exit_code": result.returncode,
-            "output": parsed,
-            "raw_output": output,
-        }
-
-
-@app.post(f"/tools/{TOOL_NAME}")
+@app.post(f"/tools/{TOOL_NAME}", dependencies=[Depends(_token_dep)])
 def invoke_tool(request: InvokeRequest) -> Dict[str, Any]:
     payload = request.input
 
-    if not payload.excel_path and not payload.script_text and not payload.cases:
-        raise HTTPException(status_code=400, detail="Provide excel_path, script_text, or cases")
+    # v1.23.x 安全加固 (CLI-C1): 移除 script_text 直通执行 ——
+    # 原「任意 Python 源码 → subprocess 执行」即零认证 RCE by design;
+    # 现仅接受结构化用例(excel_path / cases),由受控模板生成脚本。
+    if getattr(payload, "script_text", None):
+        raise HTTPException(
+            status_code=400,
+            detail="script_text is no longer supported; provide excel_path or cases",
+        )
+
+    if not payload.excel_path and not payload.cases:
+        raise HTTPException(status_code=400, detail="Provide excel_path or cases")
 
     options = _options_from_model(payload.options)
     cases = payload.cases
 
     if not cases and payload.excel_path:
-        cases = load_cases_from_excel(payload.excel_path)
+        from tasks.mcp_auth import ensure_within as _ew, read_root as _rr
+        excel = _ew(_rr(), payload.excel_path)
+        cases = load_cases_from_excel(str(excel))
 
-    script_text = payload.script_text
-    if not script_text and cases:
-        script_text = generate_playwright_script(cases, options)
-
+    script_text = generate_playwright_script(cases, options) if cases else None
     written_to = _write_script(script_text, payload.write_script_path) if script_text else None
 
-    if payload.script_text:
-        execution = _execute_script(payload.script_text)
-        result_data = {
-            "execution": execution,
-            "script_text": payload.script_text,
-            "script_written": written_to,
-            "cases": cases,
-        }
-    else:
-        results = run_cases(cases or [], options)
-        result_data = {
-            "results": results,
-            "script_text": script_text,
-            "script_written": written_to,
-            "cases": cases,
-        }
+    results = run_cases(cases or [], options)
+    result_data = {
+        "results": results,
+        "script_written": written_to,
+        "cases": cases,
+    }
 
     return {
         "tool": TOOL_NAME,

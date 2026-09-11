@@ -10,8 +10,15 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from docx import Document
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel, Field
+try:
+    from ..mcp_auth import ensure_within, make_token_dependency, read_root
+except ImportError:  # pragma: no cover
+    from tasks.mcp_auth import ensure_within, make_token_dependency, read_root
+
+# v1.23.x (CLI-H2): /tools/* 强制 Bearer 令牌
+_token_dep = make_token_dependency("word_table_export", "WORD_MCP_TOKEN")
 try:
     from .export_tables import extract_tables_from_document
 except ImportError:  # pragma: no cover - fallback for direct script execution
@@ -82,7 +89,8 @@ def _load_document_from_input(payload: WordTableInput) -> Document:
         return Document(BytesIO(binary))
 
     if payload.doc_path:
-        path = Path(payload.doc_path).expanduser().resolve()
+        # v1.23.x (CLI-H2): 读取路径限制在白名单根目录内(防任意 .docx 读取)
+        path = ensure_within(read_root(), payload.doc_path)
         if not path.exists():
             raise HTTPException(status_code=404, detail=f"File not found: {path}")
         if path.suffix.lower() != ".docx":
@@ -97,12 +105,12 @@ def healthcheck() -> Dict[str, str]:
     return {"status": "ok"}
 
 
-@app.get("/tools")
+@app.get("/tools", dependencies=[Depends(_token_dep)])
 def list_tools() -> Dict[str, Any]:
     return {"tools": [TOOL_DEFINITION]}
 
 
-@app.post(f"/tools/{TOOL_NAME}")
+@app.post(f"/tools/{TOOL_NAME}", dependencies=[Depends(_token_dep)])
 def invoke_tool(request: InvokeRequest) -> Dict[str, Any]:
     document = _load_document_from_input(request.input)
     options = request.input.options

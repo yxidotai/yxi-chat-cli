@@ -18,13 +18,21 @@ import re
 from pathlib import Path
 from typing import List
 
+import secrets
+
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 app = FastAPI(title="Obsidian MCP", version="0.1.0")
 
 VAULT_DIR = Path(os.getenv("OBSIDIAN_VAULT_DIR", "./vault")).expanduser()
-REQUIRED_TOKEN = os.getenv("OBSIDIAN_MCP_TOKEN")
+# v1.23.x (CLI-H3): 令牌默认必选 —— 未配置时从共享 mcp_auth 取/生成 0600 令牌文件,
+# 不再「未设置则完全无认证」。
+try:
+    from ..mcp_auth import ensure_within, get_service_token
+except ImportError:  # pragma: no cover
+    from tasks.mcp_auth import ensure_within, get_service_token
+REQUIRED_TOKEN = os.getenv("OBSIDIAN_MCP_TOKEN") or get_service_token("obsidian_mcp")
 
 
 # ---------- Models ----------
@@ -52,12 +60,12 @@ class MCPRequest(BaseModel):
 # ---------- Auth ----------
 
 def require_token(authorization: str | None = Header(default=None)):
-    if REQUIRED_TOKEN:
-        if not authorization or not authorization.lower().startswith("bearer "):
-            raise HTTPException(status_code=401, detail="Missing bearer token")
-        token = authorization.split(" ", 1)[1]
-        if token != REQUIRED_TOKEN:
-            raise HTTPException(status_code=403, detail="Invalid token")
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Missing bearer token")
+    token = authorization.split(" ", 1)[1]
+    # v1.23.x (L3): 常数时间比较
+    if not secrets.compare_digest(token, REQUIRED_TOKEN):
+        raise HTTPException(status_code=403, detail="Invalid token")
     return True
 
 
@@ -88,7 +96,9 @@ def search_notes(query: str, limit: int = 10):
 
 def append_note(rel_path: str, content: str):
     ensure_vault()
-    target = VAULT_DIR / rel_path
+    # v1.23.x (CLI-H3): 路径遍历防护 —— 原 VAULT_DIR / rel_path 可用 ../ 逃逸 vault
+    # 向任意文件追加内容;现强制限制在 vault 内。
+    target = ensure_within(VAULT_DIR, rel_path)
     target.parent.mkdir(parents=True, exist_ok=True)
     with target.open("a", encoding="utf-8") as f:
         f.write(content)
