@@ -103,10 +103,24 @@
     window.parseMarkdown = function(content) {
         if (!content) return '';
         try {
-            return marked.parse(content);
+            const html = marked.parse(content);
+            // XSS 消毒:marked 输出(sanitize:false,允许内联 HTML)在进入 innerHTML 前必须过 DOMPurify
+            if (window.DOMPurify && typeof window.DOMPurify.sanitize === 'function') {
+                return window.DOMPurify.sanitize(html, {
+                    ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|data:image\/|\/|#)/i,
+                    FORBID_TAGS: ['style', 'form', 'input', 'iframe'],
+                    FORBID_ATTR: ['onerror', 'onload', 'onclick']
+                });
+            }
+            // DOMPurify 不可用时回退为纯转义文本(fail-safe),绝不输出未消毒 HTML
+            console.warn('DOMPurify not loaded, falling back to escaped plain text');
+            return String(content)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
         } catch (error) {
             console.error('Markdown parsing error:', error);
-            return `<p class="parse-error">Error rendering content</p>`;
+            return '<p class="parse-error">Error rendering content</p>';
         }
     };
 
